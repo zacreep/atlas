@@ -60,7 +60,6 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 .sb-head h2{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt2);flex:1;}
 .icon-btn{background:none;border:1px solid var(--bdr);border-radius:5px;color:var(--txt2);font-size:13px;width:26px;height:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s;flex-shrink:0;}
 .icon-btn:hover{border-color:var(--bdr2);color:var(--txt);background:var(--surf2);}
-.icon-btn:disabled{opacity:.3;cursor:default;}
 .sb-search{margin:7px 9px;position:relative;}
 .sb-search input{width:100%;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;color:var(--txt);font-size:13px;padding:7px 9px 7px 28px;outline:none;}
 .sb-search input:focus{border-color:var(--bdr2);}
@@ -71,7 +70,6 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 .add-btn-row{padding:9px 12px;border-top:1px solid var(--bdr);}
 .add-btn{width:100%;background:var(--acc);border:none;border-radius:6px;color:#000;font-size:12px;font-weight:700;padding:8px;cursor:pointer;}
 .add-btn:hover{background:var(--acc2);}
-.add-btn:disabled{opacity:.35;cursor:default;}
 
 /* MAP CATEGORIES */
 .cat-group{margin-bottom:2px;}
@@ -225,8 +223,6 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
   </div>
 </div>
 
-<!-- ADMIN BADGE -->
-<div id="admin-badge">⚡ ADMIN</div>
 
 <!-- APP -->
 <div id="app" style="display:none;flex:1;flex-direction:column;overflow:hidden;padding-bottom:26px;">
@@ -244,10 +240,10 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 <!-- MAP -->
 <div class="panel on" id="panel-map">
   <div class="sidebar">
-    <div class="sb-head"><h2>Layers</h2><button class="icon-btn" id="map-cat-add-btn" onclick="openCatMod('map')">+</button></div>
+    <div class="sb-head"><h2>Layers</h2><button class="icon-btn" onclick="openCatMod('map')">+</button></div>
     <div class="sb-search"><input type="text" placeholder="Search points…" id="pt-search" oninput="filterPts()"></div>
     <div class="sb-body" id="cat-list"></div>
-    <div class="add-btn-row"><button class="add-btn" id="map-add-pt-btn" onclick="openPtMod()">+ Add Point</button></div>
+    <div class="add-btn-row"><button class="add-btn" onclick="openPtMod()">+ Add Point</button></div>
   </div>
   <div class="map-wrap" id="map-wrap">
     <div id="map-container"><img id="map-img" src="map.jpg" draggable="false" alt=""></div>
@@ -274,11 +270,11 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 <!-- CRAFT -->
 <div class="panel" id="panel-craft">
   <div class="sidebar">
-    <div class="sb-head"><h2>Recipes</h2><button class="icon-btn" id="cr-cat-add-btn" onclick="openCatMod('craft')">+</button></div>
+    <div class="sb-head"><h2>Recipes</h2><button class="icon-btn" onclick="openCatMod('craft')">+</button></div>
     <div class="sb-search"><input type="text" placeholder="Search…" id="cr-search" oninput="renderCraftList()"></div>
     <div class="pill-bar" id="cr-pills"></div>
     <div class="sb-body" id="cr-list"></div>
-    <div class="add-btn-row"><button class="add-btn" id="cr-add-btn" onclick="openCraftMod()">+ Add Recipe</button></div>
+    <div class="add-btn-row"><button class="add-btn" onclick="openCraftMod()">+ Add Recipe</button></div>
   </div>
   <div class="list-detail" id="cr-detail"><div class="list-empty"><div class="list-empty-icon">⚒</div><p>Select a recipe</p></div></div>
 </div>
@@ -286,11 +282,11 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 <!-- VENDOR -->
 <div class="panel" id="panel-vendor">
   <div class="sidebar">
-    <div class="sb-head"><h2>Vendors</h2><button class="icon-btn" id="vn-cat-add-btn" onclick="openCatMod('vendor')">+</button></div>
+    <div class="sb-head"><h2>Vendors</h2><button class="icon-btn" onclick="openCatMod('vendor')">+</button></div>
     <div class="sb-search"><input type="text" placeholder="Search…" id="vn-search" oninput="renderVendorList()"></div>
     <div class="pill-bar" id="vn-pills"></div>
     <div class="sb-body" id="vn-list"></div>
-    <div class="add-btn-row"><button class="add-btn" id="vn-add-btn" onclick="openVendorMod()">+ Add Vendor</button></div>
+    <div class="add-btn-row"><button class="add-btn" onclick="openVendorMod()">+ Add Vendor</button></div>
   </div>
   <div class="list-detail" id="vn-detail"><div class="list-empty"><div class="list-empty-icon">🏪</div><p>Select a vendor</p></div></div>
 </div>
@@ -395,9 +391,8 @@ function hide(id){document.getElementById(id).style.display='none';}
 // Show correct screen immediately
 (function(){
   const sess = sessionStorage.getItem(SESS_KEY);
-  if(sess === 'admin' || sess === 'viewer'){
+  if(sess === 'authed'){
     show('app');
-    if(sess === 'admin') document.getElementById('admin-badge').style.display = 'block';
   } else {
     show('pw-screen');
   }
@@ -406,60 +401,22 @@ function hide(id){document.getElementById(id).style.display='none';}
 function chkPw(){
   const v = document.getElementById('pw-in').value.trim();
   const errEl = document.getElementById('pw-err');
-
   if(!v) return;
-
   if(v === READ_PW){
-    // Viewer — connect read-only
-    sessionStorage.setItem(SESS_KEY, 'viewer');
+    sessionStorage.setItem(SESS_KEY, 'authed');
     hide('pw-screen'); show('app');
-    if(window._onAuth) window._onAuth(false);
-    else window._pendingAuth = false;
-    return;
+    if(window._onAuth) window._onAuth();
+    else window._pendingAuth = true;
+  } else {
+    errEl.textContent = 'Incorrect password.';
+    document.getElementById('pw-in').value = '';
+    setTimeout(()=>errEl.textContent='', 2500);
   }
-
-  // Anything else — ask Firebase if it's the admin password
-  errEl.textContent = 'Checking…';
-  document.getElementById('pw-in').disabled = true;
-
-  function handleResult(ok, reason){
-    document.getElementById('pw-in').disabled = false;
-    if(ok){
-      sessionStorage.setItem(SESS_KEY, 'admin');
-      hide('pw-screen'); show('app');
-      document.getElementById('admin-badge').style.display = 'block';
-      if(window._onAuth) window._onAuth(true);
-      else window._pendingAuth = true;
-    } else {
-      // Show real reason in console, generic message on screen
-      if(reason) console.warn('Login failed:', reason);
-      // If it looks like a permissions error, give a helpful message
-      const isPerms = reason && (reason.includes('permission') || reason.includes('Missing') || reason.includes('insufficient'));
-      errEl.textContent = isPerms
-        ? 'Database permission denied — fix Firestore rules (see console)'
-        : 'Incorrect password.';
-      document.getElementById('pw-in').value = '';
-      setTimeout(()=>errEl.textContent='', 5000);
-    }
-  }
-
-  // Poll until _checkAdminPw is available (module may still be loading)
-  function tryCheck(attempts){
-    if(window._checkAdminPw){
-      window._checkAdminPw(v, handleResult);
-    } else if(attempts > 0){
-      setTimeout(()=>tryCheck(attempts-1), 200);
-    } else {
-      document.getElementById('pw-in').disabled = false;
-      errEl.textContent = 'Could not connect to database. Check your internet connection.';
-    }
-  }
-  tryCheck(40); // up to 8 seconds
 }
 document.getElementById('pw-in').addEventListener('keydown',e=>{if(e.key==='Enter')chkPw();});
 
 function hardReset(){
-  if(!confirm('Clear session? Firebase data is NOT deleted.'))return;
+  if(!confirm('Reset view? Firebase data is NOT deleted.'))return;
   sessionStorage.clear(); location.reload();
 }
 
@@ -480,13 +437,13 @@ window.showTab=function(name,btn){
 <!-- Firebase module — loads async, communicates via window callbacks -->
 <script type="module">
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, getDoc }
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDocs }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const PC=['#5b8af5','#3ecf8e','#f0b429','#f56565','#a78bfa','#f472b6','#e8833a','#22d3ee','#84cc16','#94a3b8','#fff'];
 const PE=['📍','⭐','💎','🚗','⚠️','📝','🏴','🔥','💀','🏠','🗡️','🛡️','🎯','🏆','🔑','💣','🧪','🗺️','🐉','💰'];
 
-let db=null, isAdmin=false;
+let db=null;
 let MAP_CATS=[], catTog={}, POINTS=[], CRAFT_CATS=[], CRAFTS=[], VENDOR_CATS=[], VENDORS=[];
 let selCraft=null, selVendor=null, crFilter='all', vnFilter='all';
 let sx=1, ox=0, oy=0, drag=false, dsx,dsy,dox,doy;
@@ -507,47 +464,15 @@ async function connect(startListeners){
     } else {
       syncStatus('live','Connected');
     }
-    // Handle any pending password check that arrived before module loaded
-    if(window._pendingPwCheck){
-      const {v, cb} = window._pendingPwCheck;
-      delete window._pendingPwCheck;
-      checkAdminPw(v, cb);
-    }
+
   } catch(e){
     syncStatus('err','Firebase error: '+e.message);
     console.error('Firebase error',e);
   }
 }
 
-async function checkAdminPw(v, cb){
-  try{
-    let waited = 0;
-    while(!db && waited < 8000){ await new Promise(r=>setTimeout(r,100)); waited+=100; }
-    if(!db){ cb(false,'DB not ready'); return; }
-    const adminSnap = await getDoc(doc(db,'_config','admin'));
-    if(!adminSnap.exists()){ cb(false,'No admin doc found — check Firestore has _config/admin with a pw field'); return; }
-    const stored = (adminSnap.data().pw||'').trim();
-    const entered = v.trim();
-    cb(stored === entered, stored === entered ? null : 'Mismatch: stored="'+stored+'" entered="'+entered+'"');
-  } catch(e){
-    console.error('checkAdminPw error',e);
-    cb(false, e.message);
-  }
-}
-
-// Check whether an admin password already exists in Firebase
-async function checkPwExists(cb){
-  try{
-    if(!db){ cb(false); return; }
-    const snap = await getDocs(collection(db,'_config'));
-    cb(!!snap.docs.find(d=>d.id==='admin'));
-  } catch(e){ cb(false); }
-}
-
-// Expose to non-module script
-window._checkAdminPw = checkAdminPw;
-window._checkPwExists = checkPwExists;
-window.FB_CFG = window.FB_CFG; // already set by non-module script
+// Expose FB_CFG reference
+window.FB_CFG = window.FB_CFG;
 
 async function seedDefaults(){
   const snap = await getDocs(collection(db,'map_cats'));
@@ -582,11 +507,8 @@ async function dbSet(col,id,data){await setDoc(doc(db,col,id),data);}
 async function dbDel(col,id){await deleteDoc(doc(db,col,id));}
 
 // ── AUTH CALLBACKS (called by non-module script) ──
-function onAuth(admin){
-  isAdmin=admin;
-  setAdminUI();
+function onAuth(){
   initMap();
-  // If db already connected, just seed+listen; otherwise full connect
   if(db){
     seedDefaults().then(()=>{ listen(); syncStatus('live','Live — changes sync instantly'); });
   } else {
@@ -594,24 +516,20 @@ function onAuth(admin){
   }
 }
 
-function setAdminUI(){
-  ['map-add-pt-btn','map-cat-add-btn','cr-add-btn','cr-cat-add-btn','vn-add-btn','vn-cat-add-btn'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.disabled=!isAdmin;
-  });
-}
+
 
 // Register callbacks so non-module script can call us
 window._onAuth = onAuth;
 
 // If auth already happened before module loaded (session restore path)
 if(window._pendingAuth !== undefined){
-  onAuth(window._pendingAuth);
+  onAuth();
   delete window._pendingAuth;
 } else {
   // Session was already restored by non-module script
   const sess = sessionStorage.getItem('atlas_sess2');
-  if(sess==='admin'||sess==='viewer'){
-    onAuth(sess==='admin');
+  if(sess==='authed'){
+    onAuth();
   }
 }
 
@@ -682,7 +600,7 @@ function buildMapSidebar(){
       <button class="tog ${on?'on':'off'}" id="tog-${cat.id}" onclick="event.stopPropagation();togCat('${cat.id}')"></button>
       <div class="cat-dot" style="background:${cat.color}"></div>
       <span class="cat-lbl">${cat.name}</span><span class="cat-cnt">${pts.length}</span>
-      ${isAdmin?`<button class="cat-edit" onclick="event.stopPropagation();openCatMod('map','${cat.id}')">✏️</button>`:''}
+      <button class="cat-edit" onclick="event.stopPropagation();openCatMod('map','${cat.id}')">✏️</button>
       <span class="cat-chev">▶</span>
     </div>
     <div class="pt-list" id="pl-${cat.id}">
@@ -754,14 +672,12 @@ window.selectPt=function(id){
   if(lc.length){const h=document.createElement('p');h.style='font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt2);margin:10px 0 4px';h.textContent='Crafting';body.appendChild(h);lc.forEach(c=>{const s=document.createElement('span');s.className='linked-pill';s.textContent=c.icon+' '+c.name;s.onclick=()=>goToCraft(c.id);body.appendChild(s);});}
   if(lv.length){const h=document.createElement('p');h.style='font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt2);margin:10px 0 4px';h.textContent='Vendors';body.appendChild(h);lv.forEach(v=>{const s=document.createElement('span');s.className='linked-pill';s.textContent=v.icon+' '+v.name;s.onclick=()=>goToVendor(v.id);body.appendChild(s);});}
   const acts=document.getElementById('pd-actions'); acts.innerHTML='';
-  if(isAdmin){
-    const editBtn=document.createElement('button');
-    editBtn.style='background:none;border:1px solid var(--bdr2);color:var(--txt);font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer';
-    editBtn.textContent='✏️ Edit';
-    editBtn.onclick=()=>{closePtDetail();openPtMod(null,null,id);};
-    acts.appendChild(editBtn);
-    const delBtn=document.createElement('button');delBtn.className='pd-del';delBtn.textContent='🗑 Delete';delBtn.onclick=()=>delPt(id);acts.appendChild(delBtn);
-  }
+  const editBtn=document.createElement('button');
+  editBtn.style='background:none;border:1px solid var(--bdr2);color:var(--txt);font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer';
+  editBtn.textContent='✏️ Edit';
+  editBtn.onclick=()=>{closePtDetail();openPtMod(null,null,id);};
+  acts.appendChild(editBtn);
+  const delBtn=document.createElement('button');delBtn.className='pd-del';delBtn.textContent='🗑 Delete';delBtn.onclick=()=>delPt(id);acts.appendChild(delBtn);
   document.getElementById('pt-detail').classList.add('on');
 };
 window.closePtDetail=()=>{document.getElementById('pt-detail').classList.remove('on');document.querySelectorAll('.pt-item').forEach(e=>e.classList.remove('sel'));};
@@ -842,7 +758,7 @@ window.savePt=async function(){
 // ── CRAFT ──
 function buildCrPills(){
   document.getElementById('cr-pills').innerHTML=`<span class="pill${crFilter==='all'?' on':''}" onclick="setCrFilter('all')">All</span>`
-    +CRAFT_CATS.map(c=>`<span class="pill${crFilter===c.id?' on':''}"><span onclick="setCrFilter('${c.id}')">${c.emoji} ${c.name}</span>${isAdmin?`<span class="pill-edit" onclick="openCatMod('craft','${c.id}')">✏️</span>`:''}</span>`).join('');
+    +CRAFT_CATS.map(c=>`<span class="pill${crFilter===c.id?' on':''}"><span onclick="setCrFilter('${c.id}')">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('craft','${c.id}')">✏️</span></span>`).join('');
 }
 window.setCrFilter=f=>{crFilter=f;buildCrPills();renderCraftList();};
 function renderCraftList(){
@@ -859,7 +775,7 @@ window.selectCraft=function(id){
     <div class="det-head">
       <div class="det-icon" style="background:${cat?.color||'#444'}22">${c.icon}</div>
       <div><div class="det-title">${c.name}</div><div class="det-sub">${cat?.name||''} ${c.level?'· Lv'+c.level:''}</div></div>
-      ${isAdmin?`<div class="det-actions"><button class="det-del" onclick="delCraft('${c.id}')">🗑 Delete</button></div>`:''}
+      <div class="det-actions"><button class="det-del" onclick="delCraft('${c.id}')">🗑 Delete</button></div>
     </div>
     ${c.desc?`<p style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:18px">${c.desc}</p>`:''}
     <div class="stat-row">
@@ -893,7 +809,7 @@ window.saveCraft=async function(){
 // ── VENDOR ──
 function buildVnPills(){
   document.getElementById('vn-pills').innerHTML=`<span class="pill${vnFilter==='all'?' on':''}" onclick="setVnFilter('all')">All</span>`
-    +VENDOR_CATS.map(c=>`<span class="pill${vnFilter===c.id?' on':''}"><span onclick="setVnFilter('${c.id}')">${c.emoji} ${c.name}</span>${isAdmin?`<span class="pill-edit" onclick="openCatMod('vendor','${c.id}')">✏️</span>`:''}</span>`).join('');
+    +VENDOR_CATS.map(c=>`<span class="pill${vnFilter===c.id?' on':''}"><span onclick="setVnFilter('${c.id}')">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('vendor','${c.id}')">✏️</span></span>`).join('');
 }
 window.setVnFilter=f=>{vnFilter=f;buildVnPills();renderVendorList();};
 function renderVendorList(){
@@ -910,7 +826,7 @@ window.selectVendor=function(id){
     <div class="det-head">
       <div class="det-icon" style="background:${cat?.color||'#444'}22">${v.icon}</div>
       <div><div class="det-title">${v.name}</div><div class="det-sub">${cat?.name||''}</div></div>
-      ${isAdmin?`<div class="det-actions"><button class="det-del" onclick="delVendor('${v.id}')">🗑 Delete</button></div>`:''}
+      <div class="det-actions"><button class="det-del" onclick="delVendor('${v.id}')">🗑 Delete</button></div>
     </div>
     ${v.desc?`<p style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:18px">${v.desc}</p>`:''}
     <div class="stat-row"><div class="stat-box"><div class="stat-lbl">Trades</div><div class="stat-val">${v.trades?.length||0}</div></div></div>
