@@ -206,27 +206,12 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 .link-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;}
 .link-opt:hover{background:var(--surf2);}
 .link-opt input[type=checkbox]{accent-color:var(--acc);}
+.pd-img{background:var(--surf2);}
 </style>
 </head>
 <body>
 
-<!-- CONFIG SCREEN -->
-<div class="screen" id="cfg-screen" style="display:none;">
-  <h2>🔧 Firebase Setup</h2>
-  <p>Paste your Firebase config values. Only needs to be done once per browser.</p>
-  <div class="cfg-box">
-    <input id="cfg-apiKey"            placeholder="apiKey">
-    <input id="cfg-authDomain"        placeholder="authDomain">
-    <input id="cfg-projectId"         placeholder="projectId">
-    <input id="cfg-storageBucket"     placeholder="storageBucket">
-    <input id="cfg-messagingSenderId" placeholder="messagingSenderId">
-    <input id="cfg-appId"             placeholder="appId">
-    <input id="cfg-adminPw" type="password" placeholder="Admin password (first setup only — leave blank after)">
-    <p id="cfg-pw-note" style="font-size:11px;color:var(--txt2);text-align:center;line-height:1.5;margin-top:-4px">Admin password is stored in Firebase. Only enter it once on first setup — leave blank on all other devices.</p>
-    <button onclick="saveCfg()">Save &amp; Connect</button>
-    <div class="err-msg" id="cfg-err"></div>
-  </div>
-</div>
+<!-- config screen removed — credentials hardcoded -->
 
 <!-- PASSWORD SCREEN -->
 <div class="screen" id="pw-screen" style="display:none;">
@@ -236,9 +221,7 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
     <input type="password" id="pw-in" placeholder="••••••••••">
     <button onclick="chkPw()">Enter</button>
     <div class="err-msg" id="pw-err"></div>
-    <div style="text-align:center;margin-top:4px">
-      <span style="font-size:11px;color:var(--txt2);cursor:pointer;text-decoration:underline" onclick="showCfgScreen()">Admin setup / change config ⚙</span>
-    </div>
+
   </div>
 </div>
 
@@ -253,7 +236,7 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
   <button class="t-btn"    id="nav-craft"  onclick="showTab('craft',this)">⚒ Crafting</button>
   <button class="t-btn"    id="nav-vendor" onclick="showTab('vendor',this)">🏪 Vendors</button>
   <div class="spacer"></div>
-  <button class="nav-sm" onclick="showCfgScreen()">⚙ Config</button>
+
   <button class="nav-sm" onclick="hardReset()" style="color:var(--red)">↺ Reset</button>
 </nav>
 <div class="tab-row">
@@ -337,19 +320,23 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 </div></div>
 
 <div class="overlay" id="pt-mod"><div class="modal">
-  <div class="mod-head"><h3>Map Point</h3><button class="x-btn" onclick="closePtMod()">×</button></div>
+  <div class="mod-head"><h3 id="pt-mod-title">Map Point</h3><button class="x-btn" onclick="closePtMod()">×</button></div>
   <div class="mod-body">
-    <div class="hint-box">💡 Hold <b>Shift</b> and click the map to auto-fill coordinates.</div>
+    <div class="hint-box" id="pt-mod-hint">💡 Hold <b>Shift</b> and click the map to auto-fill coordinates.</div>
     <div><label class="lbl">Name</label><input class="inp" id="pt-name" placeholder="Point name"></div>
     <div><label class="lbl">Category</label><select class="sel" id="pt-cat"></select></div>
     <div class="row2">
-      <div><label class="lbl">X (0–100%)</label><input class="inp" type="number" id="pt-x" min="0" max="100" step=".1" placeholder="50"></div>
-      <div><label class="lbl">Y (0–100%)</label><input class="inp" type="number" id="pt-y" min="0" max="100" step=".1" placeholder="50"></div>
+      <div><label class="lbl">X (0–100%)</label><input class="inp" type="number" id="pt-x" min="0" max="100" step=".01" placeholder="50"></div>
+      <div><label class="lbl">Y (0–100%)</label><input class="inp" type="number" id="pt-y" min="0" max="100" step=".01" placeholder="50"></div>
     </div>
     <div><label class="lbl">Description</label><textarea class="ta" id="pt-desc" placeholder="Notes…"></textarea></div>
-    <div><label class="lbl">Image URL (optional)</label><input class="inp" id="pt-img" placeholder="https://…"></div>
+    <div>
+      <label class="lbl">Image URLs (one per line)</label>
+      <textarea class="ta" id="pt-imgs" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg" style="min-height:80px"></textarea>
+      <div style="font-size:11px;color:var(--txt2);margin-top:4px">Add as many image URLs as you want, one per line.</div>
+    </div>
   </div>
-  <div class="mod-foot"><button class="btn-c" onclick="closePtMod()">Cancel</button><button class="btn-s" onclick="savePt()">Save</button></div>
+  <div class="mod-foot"><button class="btn-c" onclick="closePtMod()">Cancel</button><button class="btn-s" id="pt-save-btn" onclick="savePt()">Save</button></div>
 </div></div>
 
 <div class="overlay" id="cr-mod"><div class="modal lg">
@@ -390,17 +377,23 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 
 <!-- REGULAR (non-module) script first — handles screen routing safely -->
 <script>
-const READ_PW = 'naontop123';
-const CFG_KEY  = 'atlas_cfg2';
+const READ_PW  = 'naontop123';
 const SESS_KEY = 'atlas_sess2';
+const FB_CFG   = {
+  apiKey:            'AIzaSyDAYUxBmUtdD1kzolh7qsLvojezmE1M46k',
+  authDomain:        'atlas-e6812.firebaseapp.com',
+  projectId:         'atlas-e6812',
+  storageBucket:     'atlas-e6812.firebasestorage.app',
+  messagingSenderId: '843969660887',
+  appId:             '1:843969660887:web:bfc484c0d79b1059566d92',
+};
+window.FB_CFG = FB_CFG;
 
-function getCfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY));}catch(e){return null;}}
 function show(id){document.getElementById(id).style.display='flex';}
 function hide(id){document.getElementById(id).style.display='none';}
 
-// Decide which screen to show immediately — no waiting for module
+// Show correct screen immediately
 (function(){
-  const cfg = getCfg();
   const sess = sessionStorage.getItem(SESS_KEY);
   if(sess === 'admin' || sess === 'viewer'){
     show('app');
@@ -410,82 +403,14 @@ function hide(id){document.getElementById(id).style.display='none';}
   }
 })();
 
-function showCfgScreen(){
-  const c = getCfg()||{};
-  ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].forEach(k=>{
-    document.getElementById('cfg-'+k).value = c[k]||'';
-  });
-  const pwField = document.getElementById('cfg-adminPw');
-  const pwNote  = document.getElementById('cfg-pw-note');
-  pwField.value = '';
-  pwField.disabled = false;
-  pwField.placeholder = 'Admin password (first setup only — leave blank after)';
-  pwNote.textContent = 'Admin password is stored in Firebase. Only set it once on first setup.';
-  document.getElementById('cfg-err').textContent = '';
-  hide('app'); hide('pw-screen'); show('cfg-screen');
-  // If we already have Firebase creds, check whether a password is already set
-  if(c.apiKey){
-    pwNote.textContent = 'Checking Firebase…';
-    function doCheck(){
-      window._checkPwExists(exists => {
-        if(exists){
-          pwField.value = '';
-          pwField.disabled = true;
-          pwField.placeholder = 'Admin password already set — cannot change here';
-          pwNote.textContent = '🔒 Admin password is locked in Firebase. Contact the original admin to change it.';
-        } else {
-          pwNote.textContent = '⚠️ No admin password set yet — enter one below to claim admin access.';
-        }
-      });
-    }
-    if(window._checkPwExists){
-      doCheck();
-    } else {
-      // Connect Firebase first (read-only probe), then check
-      if(window._fbConnect) window._fbConnect({...c, _pendingAdminPw: null});
-      // Poll until module exposes the function
-      const poll = setInterval(()=>{
-        if(window._checkPwExists){ clearInterval(poll); doCheck(); }
-      }, 150);
-      setTimeout(()=>clearInterval(poll), 8000);
-    }
-  }
-}
-
-function saveCfg(){
-  const keys=['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'];
-  const cfg={};
-  for(const k of keys){
-    const v=document.getElementById('cfg-'+k).value.trim();
-    if(!v){document.getElementById('cfg-err').textContent='Fill in all fields.';return;}
-    cfg[k]=v;
-  }
-  // adminPw is no longer stored locally — it goes to Firebase only
-  const pwField = document.getElementById('cfg-adminPw');
-  const adminPw = pwField.disabled ? null : pwField.value.trim();
-  cfg._pendingAdminPw = adminPw || null; // passed to module to write to Firestore
-  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-  hide('cfg-screen');
-  show('pw-screen');
-  document.getElementById('pw-err').textContent = '✅ Config saved! Enter your password to continue.';
-  if(window._fbConnect) window._fbConnect(cfg);
-}
-
 function chkPw(){
   const v = document.getElementById('pw-in').value.trim();
-  const cfg = getCfg();
   const errEl = document.getElementById('pw-err');
 
   if(!v) return;
 
-  if(!cfg){
-    errEl.textContent = 'First-time setup needed — click "Admin setup" below.';
-    setTimeout(()=>errEl.textContent='', 4000);
-    return;
-  }
-
   if(v === READ_PW){
-    // Viewer — no Firebase password check needed, just connect read-only
+    // Viewer — connect read-only
     sessionStorage.setItem(SESS_KEY, 'viewer');
     hide('pw-screen'); show('app');
     if(window._onAuth) window._onAuth(false);
@@ -532,8 +457,8 @@ function chkPw(){
 document.getElementById('pw-in').addEventListener('keydown',e=>{if(e.key==='Enter')chkPw();});
 
 function hardReset(){
-  if(!confirm('Clear local config and session? Firebase data is NOT deleted.'))return;
-  localStorage.removeItem(CFG_KEY); sessionStorage.clear(); location.reload();
+  if(!confirm('Clear session? Firebase data is NOT deleted.'))return;
+  sessionStorage.clear(); location.reload();
 }
 
 function syncStatus(state, msg){
@@ -566,30 +491,20 @@ let sx=1, ox=0, oy=0, drag=false, dsx,dsy,dox,doy;
 let ecatType=null, ecatId=null, eSelC='#5b8af5', eSelE='📍';
 
 // ── FIREBASE ──
-async function connect(cfg){
+async function connect(startListeners){
   try{
     syncStatus('spin','Connecting…');
+    const cfg = window.FB_CFG;
     const existing = getApps().find(a=>a.name===cfg.projectId);
     const app = existing || initializeApp(cfg, cfg.projectId);
     db = getFirestore(app);
-    // If a new admin password was set in the config screen, write it to Firestore
-    if(cfg._pendingAdminPw){
-      const snap = await getDocs(collection(db,'_config'));
-      // Only allow setting if none exists yet, OR if caller is already admin
-      const existing_pw = snap.docs.find(d=>d.id==='admin');
-      if(!existing_pw){
-        await setDoc(doc(db,'_config','admin'),{pw: cfg._pendingAdminPw});
-      } else {
-        // Password already set — don't overwrite silently
-        // Remove the pending pw so it doesn't linger
-      }
-      // Strip pending pw from local storage
-      const clean = {...cfg}; delete clean._pendingAdminPw;
-      localStorage.setItem('atlas_cfg2', JSON.stringify(clean));
+    if(startListeners){
+      await seedDefaults();
+      listen();
+      syncStatus('live','Live — changes sync instantly');
+    } else {
+      syncStatus('live','Connected');
     }
-    await seedDefaults();
-    listen();
-    syncStatus('live','Live — changes sync instantly');
     // Handle any pending password check that arrived before module loaded
     if(window._pendingPwCheck){
       const {v, cb} = window._pendingPwCheck;
@@ -623,6 +538,7 @@ async function checkPwExists(cb){
 // Expose to non-module script
 window._checkAdminPw = checkAdminPw;
 window._checkPwExists = checkPwExists;
+window.FB_CFG = window.FB_CFG; // already set by non-module script
 
 async function seedDefaults(){
   const snap = await getDocs(collection(db,'map_cats'));
@@ -661,8 +577,12 @@ function onAuth(admin){
   isAdmin=admin;
   setAdminUI();
   initMap();
-  const cfg=JSON.parse(localStorage.getItem('atlas_cfg2'));
-  if(cfg) connect(cfg);
+  // If db already connected, just seed+listen; otherwise full connect
+  if(db){
+    seedDefaults().then(()=>{ listen(); syncStatus('live','Live — changes sync instantly'); });
+  } else {
+    connect(true);
+  }
 }
 
 function setAdminUI(){
@@ -673,7 +593,6 @@ function setAdminUI(){
 
 // Register callbacks so non-module script can call us
 window._onAuth = onAuth;
-window._fbConnect = cfg => connect(cfg);
 
 // If auth already happened before module loaded (session restore path)
 if(window._pendingAuth !== undefined){
@@ -725,13 +644,13 @@ function initMap(){
   window.addEventListener('keydown',e=>{if(e.key==='Shift'){shift=true;document.getElementById('sh-hint').classList.add('on');}});
   window.addEventListener('keyup',  e=>{if(e.key==='Shift'){shift=false;document.getElementById('sh-hint').classList.remove('on');}});
   w.addEventListener('mousedown',e=>{
-    if(shift&&isAdmin){const r=w.getBoundingClientRect();const p=s2p(e.clientX-r.left,e.clientY-r.top);openPtMod(p.x.toFixed(1),p.y.toFixed(1));return;}
+    if(shift&&isAdmin){const r=w.getBoundingClientRect();const p=s2p(e.clientX-r.left,e.clientY-r.top);openPtMod(p.x.toFixed(2),p.y.toFixed(2));return;}
     drag=true;dsx=e.clientX;dsy=e.clientY;dox=ox;doy=oy;w.classList.add('grab');
   });
   window.addEventListener('mousemove',e=>{
     const r=w.getBoundingClientRect();
     const p=s2p(e.clientX-r.left,e.clientY-r.top);
-    document.getElementById('m-coords').textContent=`${p.x.toFixed(1)}%, ${p.y.toFixed(1)}%`;
+    document.getElementById('m-coords').textContent=`${p.x.toFixed(2)}%, ${p.y.toFixed(2)}%`;
     if(!drag)return;
     ox=dox+(e.clientX-dsx); oy=doy+(e.clientY-dsy); applyT();
   });
@@ -801,14 +720,39 @@ window.selectPt=function(id){
   document.getElementById('pd-title').textContent=p.name;
   document.getElementById('pd-cat').textContent=cat?.name||p.cat;
   const body=document.getElementById('pd-body'); body.innerHTML='';
-  if(p.img){const img=document.createElement('img');img.src=p.img;img.className='pd-img';body.appendChild(img);}
+  // Multiple images — show all with prev/next if more than one
+  const imgs = p.imgs && p.imgs.length ? p.imgs : (p.img ? [p.img] : []);
+  if(imgs.length === 1){
+    const img=document.createElement('img');img.src=imgs[0];img.className='pd-img';img.onerror=()=>img.style.display='none';body.appendChild(img);
+  } else if(imgs.length > 1){
+    const wrap=document.createElement('div');wrap.style='position:relative;margin-bottom:9px';
+    const imgEl=document.createElement('img');imgEl.src=imgs[0];imgEl.className='pd-img';imgEl.style='margin-bottom:0';imgEl.onerror=()=>imgEl.style.display='none';
+    let imgIdx=0;
+    const counter=document.createElement('div');
+    counter.style='font-size:11px;color:var(--txt2);text-align:center;padding:4px 0';
+    counter.textContent=`1 / ${imgs.length}`;
+    const nav=document.createElement('div');nav.style='display:flex;gap:6px;justify-content:center;margin-bottom:8px';
+    const prev=document.createElement('button');prev.textContent='‹';prev.style='background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);border-radius:4px;padding:2px 10px;cursor:pointer;font-size:16px';
+    const next=document.createElement('button');next.textContent='›';next.style='background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);border-radius:4px;padding:2px 10px;cursor:pointer;font-size:16px';
+    prev.onclick=()=>{imgIdx=(imgIdx-1+imgs.length)%imgs.length;imgEl.src=imgs[imgIdx];counter.textContent=`${imgIdx+1} / ${imgs.length}`;};
+    next.onclick=()=>{imgIdx=(imgIdx+1)%imgs.length;imgEl.src=imgs[imgIdx];counter.textContent=`${imgIdx+1} / ${imgs.length}`;};
+    nav.appendChild(prev);nav.appendChild(counter);nav.appendChild(next);
+    wrap.appendChild(imgEl);body.appendChild(wrap);body.appendChild(nav);
+  }
   if(p.desc){const d=document.createElement('p');d.textContent=p.desc;body.appendChild(d);}
   const lc=CRAFTS.filter(c=>c.pins&&c.pins.includes(id));
   const lv=VENDORS.filter(v=>v.pins&&v.pins.includes(id));
   if(lc.length){const h=document.createElement('p');h.style='font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt2);margin:10px 0 4px';h.textContent='Crafting';body.appendChild(h);lc.forEach(c=>{const s=document.createElement('span');s.className='linked-pill';s.textContent=c.icon+' '+c.name;s.onclick=()=>goToCraft(c.id);body.appendChild(s);});}
   if(lv.length){const h=document.createElement('p');h.style='font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt2);margin:10px 0 4px';h.textContent='Vendors';body.appendChild(h);lv.forEach(v=>{const s=document.createElement('span');s.className='linked-pill';s.textContent=v.icon+' '+v.name;s.onclick=()=>goToVendor(v.id);body.appendChild(s);});}
   const acts=document.getElementById('pd-actions'); acts.innerHTML='';
-  if(isAdmin){const btn=document.createElement('button');btn.className='pd-del';btn.textContent='🗑 Delete Pin';btn.onclick=()=>delPt(id);acts.appendChild(btn);}
+  if(isAdmin){
+    const editBtn=document.createElement('button');
+    editBtn.style='background:none;border:1px solid var(--bdr2);color:var(--txt);font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer';
+    editBtn.textContent='✏️ Edit';
+    editBtn.onclick=()=>{closePtDetail();openPtMod(null,null,id);};
+    acts.appendChild(editBtn);
+    const delBtn=document.createElement('button');delBtn.className='pd-del';delBtn.textContent='🗑 Delete';delBtn.onclick=()=>delPt(id);acts.appendChild(delBtn);
+  }
   document.getElementById('pt-detail').classList.add('on');
 };
 window.closePtDetail=()=>{document.getElementById('pt-detail').classList.remove('on');document.querySelectorAll('.pt-item').forEach(e=>e.classList.remove('sel'));};
@@ -859,20 +803,30 @@ window.delCat=async function(){
 };
 
 // ── POINT MODAL ──
-window.openPtMod=function(px,py){
-  document.getElementById('pt-cat').innerHTML=MAP_CATS.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
-  document.getElementById('pt-name').value='';
-  document.getElementById('pt-x').value=px||'';
-  document.getElementById('pt-y').value=py||'';
-  document.getElementById('pt-desc').value='';
-  document.getElementById('pt-img').value='';
+let editingPtId = null;
+window.openPtMod=function(px,py,editId){
+  editingPtId = editId||null;
+  const isEdit = !!editId;
+  const p = isEdit ? POINTS.find(x=>x.id===editId) : null;
+  document.getElementById('pt-mod-title').textContent = isEdit ? 'Edit Pin' : 'New Map Point';
+  document.getElementById('pt-mod-hint').style.display = isEdit ? 'none' : 'block';
+  document.getElementById('pt-cat').innerHTML=MAP_CATS.map(c=>`<option value="${c.id}"${p&&p.cat===c.id?' selected':''}>${c.emoji} ${c.name}</option>`).join('');
+  document.getElementById('pt-name').value = p ? p.name : '';
+  document.getElementById('pt-x').value = p ? p.x : (px||'');
+  document.getElementById('pt-y').value = p ? p.y : (py||'');
+  document.getElementById('pt-desc').value = p ? (p.desc||'') : '';
+  // images: support old single img field and new imgs array
+  const imgs = p ? (p.imgs ? p.imgs.join('\n') : (p.img||'')) : '';
+  document.getElementById('pt-imgs').value = imgs;
   document.getElementById('pt-mod').classList.add('on');
 };
 window.closePtMod=()=>document.getElementById('pt-mod').classList.remove('on');
 window.savePt=async function(){
   const name=document.getElementById('pt-name').value.trim();if(!name){alert('Enter a name');return;}
-  const id=uid();
-  await dbSet('points',id,{id,name,cat:document.getElementById('pt-cat').value,x:parseFloat(document.getElementById('pt-x').value)||50,y:parseFloat(document.getElementById('pt-y').value)||50,desc:document.getElementById('pt-desc').value.trim(),img:document.getElementById('pt-img').value.trim()});
+  const imgs = document.getElementById('pt-imgs').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const id = editingPtId || uid();
+  await dbSet('points',id,{id,name,cat:document.getElementById('pt-cat').value,x:parseFloat(document.getElementById('pt-x').value)||50,y:parseFloat(document.getElementById('pt-y').value)||50,desc:document.getElementById('pt-desc').value.trim(),imgs,img:imgs[0]||''});
+  editingPtId=null;
   closePtMod();
 };
 
