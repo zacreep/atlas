@@ -421,38 +421,34 @@ function chkPw(){
   // Anything else — ask Firebase if it's the admin password
   errEl.textContent = 'Checking…';
   document.getElementById('pw-in').disabled = true;
-  if(window._checkAdminPw){
-    window._checkAdminPw(v, (ok)=>{
-      document.getElementById('pw-in').disabled = false;
-      if(ok){
-        sessionStorage.setItem(SESS_KEY, 'admin');
-        hide('pw-screen'); show('app');
-        document.getElementById('admin-badge').style.display = 'block';
-        if(window._onAuth) window._onAuth(true);
-        else window._pendingAuth = true;
-      } else {
-        errEl.textContent = 'Incorrect password.';
-        document.getElementById('pw-in').value = '';
-        setTimeout(()=>errEl.textContent='', 2500);
-      }
-    });
-  } else {
-    // Module not loaded yet — queue it
-    window._pendingPwCheck = {v, cb: (ok)=>{
-      document.getElementById('pw-in').disabled = false;
-      if(ok){
-        sessionStorage.setItem(SESS_KEY,'admin');
-        hide('pw-screen'); show('app');
-        document.getElementById('admin-badge').style.display='block';
-        if(window._onAuth) window._onAuth(true);
-        else window._pendingAuth=true;
-      } else {
-        errEl.textContent='Incorrect password.';
-        document.getElementById('pw-in').value='';
-        setTimeout(()=>errEl.textContent='',2500);
-      }
-    }};
+
+  function handleResult(ok){
+    document.getElementById('pw-in').disabled = false;
+    if(ok){
+      sessionStorage.setItem(SESS_KEY, 'admin');
+      hide('pw-screen'); show('app');
+      document.getElementById('admin-badge').style.display = 'block';
+      if(window._onAuth) window._onAuth(true);
+      else window._pendingAuth = true;
+    } else {
+      errEl.textContent = 'Incorrect password.';
+      document.getElementById('pw-in').value = '';
+      setTimeout(()=>errEl.textContent='', 2500);
+    }
   }
+
+  // Poll until _checkAdminPw is available (module may still be loading)
+  function tryCheck(attempts){
+    if(window._checkAdminPw){
+      window._checkAdminPw(v, handleResult);
+    } else if(attempts > 0){
+      setTimeout(()=>tryCheck(attempts-1), 200);
+    } else {
+      document.getElementById('pw-in').disabled = false;
+      errEl.textContent = 'Could not connect to database. Check your internet connection.';
+    }
+  }
+  tryCheck(40); // up to 8 seconds
 }
 document.getElementById('pw-in').addEventListener('keydown',e=>{if(e.key==='Enter')chkPw();});
 
@@ -478,7 +474,7 @@ window.showTab=function(name,btn){
 <!-- Firebase module — loads async, communicates via window callbacks -->
 <script type="module">
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDocs }
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDocs, getDoc }
   from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const PC=['#5b8af5','#3ecf8e','#f0b429','#f56565','#a78bfa','#f472b6','#e8833a','#22d3ee','#84cc16','#94a3b8','#fff'];
@@ -519,11 +515,16 @@ async function connect(startListeners){
 
 async function checkAdminPw(v, cb){
   try{
-    const snap = await getDocs(collection(db,'_config'));
-    const adminDoc = snap.docs.find(d=>d.id==='admin');
-    if(!adminDoc){ cb(false); return; }
-    cb(adminDoc.data().pw === v);
-  } catch(e){ cb(false); }
+    // Wait up to 8s for db to be ready
+    let waited = 0;
+    while(!db && waited < 8000){ await new Promise(r=>setTimeout(r,100)); waited+=100; }
+    if(!db){ cb(false); return; }
+    const adminRef = doc(db,'_config','admin');
+    const adminSnap = await getDoc(adminRef);
+    if(!adminSnap.exists()){ cb(false); return; }
+    const stored = adminSnap.data().pw;
+    cb(stored === v);
+  } catch(e){ console.error('checkAdminPw error',e); cb(false); }
 }
 
 // Check whether an admin password already exists in Firebase
