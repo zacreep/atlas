@@ -415,7 +415,8 @@ function showCfgScreen(){
     document.getElementById('cfg-'+k).value = c[k]||'';
   });
   document.getElementById('cfg-adminPw').value = '';
-  hide('app'); show('cfg-screen');
+  document.getElementById('cfg-err').textContent = '';
+  hide('app'); hide('pw-screen'); show('cfg-screen');
 }
 
 function saveCfg(){
@@ -433,8 +434,7 @@ function saveCfg(){
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
   hide('cfg-screen');
   show('pw-screen');
-  // tell module to (re)connect
-  if(window._fbConnect) window._fbConnect(cfg);
+  document.getElementById('pw-err').textContent = '✅ Config saved! Enter your password to continue.';
 }
 
 function chkPw(){
