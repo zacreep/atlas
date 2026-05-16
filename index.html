@@ -222,7 +222,7 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
     <input id="cfg-messagingSenderId" placeholder="messagingSenderId">
     <input id="cfg-appId"             placeholder="appId">
     <input id="cfg-adminPw" type="password" placeholder="Admin password (first setup only — leave blank after)">
-    <p style="font-size:11px;color:var(--txt2);text-align:center;line-height:1.5;margin-top:-4px">Admin password is stored in Firebase. Only enter it once on first setup — leave blank on all other devices.</p>
+    <p id="cfg-pw-note" style="font-size:11px;color:var(--txt2);text-align:center;line-height:1.5;margin-top:-4px">Admin password is stored in Firebase. Only enter it once on first setup — leave blank on all other devices.</p>
     <button onclick="saveCfg()">Save &amp; Connect</button>
     <div class="err-msg" id="cfg-err"></div>
   </div>
@@ -267,7 +267,7 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
     <div class="add-btn-row"><button class="add-btn" id="map-add-pt-btn" onclick="openPtMod()">+ Add Point</button></div>
   </div>
   <div class="map-wrap" id="map-wrap">
-    <div id="map-container"><img id="map-img" src="map.png" draggable="false" alt=""></div>
+    <div id="map-container"><img id="map-img" src="map.jpg" draggable="false" alt=""></div>
     <div id="pin-overlay"></div>
     <div class="zoom-ctrl">
       <button class="z-btn" onclick="zm(1.3)">+</button>
@@ -415,9 +415,41 @@ function showCfgScreen(){
   ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].forEach(k=>{
     document.getElementById('cfg-'+k).value = c[k]||'';
   });
-  document.getElementById('cfg-adminPw').value = '';
+  const pwField = document.getElementById('cfg-adminPw');
+  const pwNote  = document.getElementById('cfg-pw-note');
+  pwField.value = '';
+  pwField.disabled = false;
+  pwField.placeholder = 'Admin password (first setup only — leave blank after)';
+  pwNote.textContent = 'Admin password is stored in Firebase. Only set it once on first setup.';
   document.getElementById('cfg-err').textContent = '';
   hide('app'); hide('pw-screen'); show('cfg-screen');
+  // If we already have Firebase creds, check whether a password is already set
+  if(c.apiKey){
+    pwNote.textContent = 'Checking Firebase…';
+    function doCheck(){
+      window._checkPwExists(exists => {
+        if(exists){
+          pwField.value = '';
+          pwField.disabled = true;
+          pwField.placeholder = 'Admin password already set — cannot change here';
+          pwNote.textContent = '🔒 Admin password is locked in Firebase. Contact the original admin to change it.';
+        } else {
+          pwNote.textContent = '⚠️ No admin password set yet — enter one below to claim admin access.';
+        }
+      });
+    }
+    if(window._checkPwExists){
+      doCheck();
+    } else {
+      // Connect Firebase first (read-only probe), then check
+      if(window._fbConnect) window._fbConnect({...c, _pendingAdminPw: null});
+      // Poll until module exposes the function
+      const poll = setInterval(()=>{
+        if(window._checkPwExists){ clearInterval(poll); doCheck(); }
+      }, 150);
+      setTimeout(()=>clearInterval(poll), 8000);
+    }
+  }
 }
 
 function saveCfg(){
@@ -429,7 +461,8 @@ function saveCfg(){
     cfg[k]=v;
   }
   // adminPw is no longer stored locally — it goes to Firebase only
-  const adminPw = document.getElementById('cfg-adminPw').value.trim();
+  const pwField = document.getElementById('cfg-adminPw');
+  const adminPw = pwField.disabled ? null : pwField.value.trim();
   cfg._pendingAdminPw = adminPw || null; // passed to module to write to Firestore
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
   hide('cfg-screen');
@@ -578,8 +611,18 @@ async function checkAdminPw(v, cb){
   } catch(e){ cb(false); }
 }
 
+// Check whether an admin password already exists in Firebase
+async function checkPwExists(cb){
+  try{
+    if(!db){ cb(false); return; }
+    const snap = await getDocs(collection(db,'_config'));
+    cb(!!snap.docs.find(d=>d.id==='admin'));
+  } catch(e){ cb(false); }
+}
+
 // Expose to non-module script
 window._checkAdminPw = checkAdminPw;
+window._checkPwExists = checkPwExists;
 
 async function seedDefaults(){
   const snap = await getDocs(collection(db,'map_cats'));
