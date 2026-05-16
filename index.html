@@ -553,7 +553,9 @@ function movePins(){
   });
 }
 window.resetV=function(){
+  if(!imgW() || !imgH()) return; // image not loaded yet
   const w=document.getElementById('map-wrap');
+  if(!w.clientWidth) return; // panel not visible yet
   sx=Math.min(w.clientWidth/imgW(),w.clientHeight/imgH())*.9;
   ox=(w.clientWidth-imgW()*sx)/2; oy=(w.clientHeight-imgH()*sx)/2;
   applyT();
@@ -571,7 +573,7 @@ function initMap(){
   window.addEventListener('keydown',e=>{if(e.key==='Shift'){shift=true;document.getElementById('sh-hint').classList.add('on');}});
   window.addEventListener('keyup',  e=>{if(e.key==='Shift'){shift=false;document.getElementById('sh-hint').classList.remove('on');}});
   w.addEventListener('mousedown',e=>{
-    if(shift&&isAdmin){const r=w.getBoundingClientRect();const p=s2p(e.clientX-r.left,e.clientY-r.top);openPtMod(p.x.toFixed(2),p.y.toFixed(2));return;}
+    if(shift){const r=w.getBoundingClientRect();const p=s2p(e.clientX-r.left,e.clientY-r.top);openPtMod(p.x.toFixed(2),p.y.toFixed(2));return;}
     drag=true;dsx=e.clientX;dsy=e.clientY;dox=ox;doy=oy;w.classList.add('grab');
   });
   window.addEventListener('mousemove',e=>{
@@ -583,9 +585,16 @@ function initMap(){
   });
   window.addEventListener('mouseup',()=>{drag=false;document.getElementById('map-wrap').classList.remove('grab');});
   w.addEventListener('wheel',e=>{e.preventDefault();const r=w.getBoundingClientRect();window.zm(e.deltaY<0?1.15:.87,e.clientX-r.left,e.clientY-r.top);},{passive:false});
-  const img=document.getElementById('map-img');
-  if(img.complete&&img.naturalWidth) window.resetV();
-  else img.addEventListener('load',()=>window.resetV());
+  // Robust image-ready check — handles cached, mid-load, and slow cases
+  const img = document.getElementById('map-img');
+  function onImgReady(){
+    if(img.naturalWidth > 0) window.resetV();
+  }
+  img.addEventListener('load', onImgReady);
+  // Poll in case load event already fired before listener was attached
+  const imgPoll = setInterval(()=>{
+    if(img.naturalWidth > 0){ clearInterval(imgPoll); onImgReady(); }
+  }, 50);
 }
 
 // ── MAP SIDEBAR ──
