@@ -221,7 +221,8 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
     <input id="cfg-storageBucket"     placeholder="storageBucket">
     <input id="cfg-messagingSenderId" placeholder="messagingSenderId">
     <input id="cfg-appId"             placeholder="appId">
-    <input id="cfg-adminPw" type="password" placeholder="Admin password (you choose this)">
+    <input id="cfg-adminPw" type="password" placeholder="Admin password (first setup only — leave blank after)">
+    <p style="font-size:11px;color:var(--txt2);text-align:center;line-height:1.5;margin-top:-4px">Admin password is stored in Firebase. Only enter it once on first setup — leave blank on all other devices.</p>
     <button onclick="saveCfg()">Save &amp; Connect</button>
     <div class="err-msg" id="cfg-err"></div>
   </div>
@@ -427,52 +428,72 @@ function saveCfg(){
     if(!v){document.getElementById('cfg-err').textContent='Fill in all fields.';return;}
     cfg[k]=v;
   }
+  // adminPw is no longer stored locally — it goes to Firebase only
   const adminPw = document.getElementById('cfg-adminPw').value.trim();
-  if(adminPw) cfg.adminPw = adminPw;
-  else { const old=getCfg(); if(old&&old.adminPw) cfg.adminPw=old.adminPw; }
-  if(!cfg.adminPw){document.getElementById('cfg-err').textContent='Set an admin password.';return;}
+  cfg._pendingAdminPw = adminPw || null; // passed to module to write to Firestore
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
   hide('cfg-screen');
   show('pw-screen');
   document.getElementById('pw-err').textContent = '✅ Config saved! Enter your password to continue.';
+  if(window._fbConnect) window._fbConnect(cfg);
 }
 
 function chkPw(){
-  const v = document.getElementById('pw-in').value;
+  const v = document.getElementById('pw-in').value.trim();
   const cfg = getCfg();
-  const isAdmin = cfg && v === cfg.adminPw;
-  const isViewer = v === READ_PW;
-  if(isViewer && !isAdmin){
-    // Viewer — needs Firebase cfg to load data
-    if(!cfg){
-      const e=document.getElementById('pw-err');
-      e.textContent='First-time setup needed — click "Admin setup / change config" below.';
-      setTimeout(()=>e.textContent='',4000);
-      return;
-    }
+  const errEl = document.getElementById('pw-err');
+
+  if(!v) return;
+
+  if(!cfg){
+    errEl.textContent = 'First-time setup needed — click "Admin setup" below.';
+    setTimeout(()=>errEl.textContent='', 4000);
+    return;
+  }
+
+  if(v === READ_PW){
+    // Viewer — no Firebase password check needed, just connect read-only
     sessionStorage.setItem(SESS_KEY, 'viewer');
-    hide('pw-screen');
-    show('app');
+    hide('pw-screen'); show('app');
     if(window._onAuth) window._onAuth(false);
     else window._pendingAuth = false;
-  } else if(isAdmin){
-    sessionStorage.setItem(SESS_KEY, 'admin');
-    hide('pw-screen');
-    show('app');
-    document.getElementById('admin-badge').style.display='block';
-    if(window._onAuth) window._onAuth(true);
-    else window._pendingAuth = true;
-  } else if(!cfg && v.length > 0){
-    // Wrong password — might be an unconfigured admin attempt
-    const e=document.getElementById('pw-err');
-    e.textContent='Incorrect password. Admins: click ⚙ Config first.';
-    document.getElementById('pw-in').value='';
-    setTimeout(()=>e.textContent='',3500);
+    return;
+  }
+
+  // Anything else — ask Firebase if it's the admin password
+  errEl.textContent = 'Checking…';
+  document.getElementById('pw-in').disabled = true;
+  if(window._checkAdminPw){
+    window._checkAdminPw(v, (ok)=>{
+      document.getElementById('pw-in').disabled = false;
+      if(ok){
+        sessionStorage.setItem(SESS_KEY, 'admin');
+        hide('pw-screen'); show('app');
+        document.getElementById('admin-badge').style.display = 'block';
+        if(window._onAuth) window._onAuth(true);
+        else window._pendingAuth = true;
+      } else {
+        errEl.textContent = 'Incorrect password.';
+        document.getElementById('pw-in').value = '';
+        setTimeout(()=>errEl.textContent='', 2500);
+      }
+    });
   } else {
-    const e=document.getElementById('pw-err');
-    e.textContent='Incorrect password.';
-    document.getElementById('pw-in').value='';
-    setTimeout(()=>e.textContent='',2500);
+    // Module not loaded yet — queue it
+    window._pendingPwCheck = {v, cb: (ok)=>{
+      document.getElementById('pw-in').disabled = false;
+      if(ok){
+        sessionStorage.setItem(SESS_KEY,'admin');
+        hide('pw-screen'); show('app');
+        document.getElementById('admin-badge').style.display='block';
+        if(window._onAuth) window._onAuth(true);
+        else window._pendingAuth=true;
+      } else {
+        errEl.textContent='Incorrect password.';
+        document.getElementById('pw-in').value='';
+        setTimeout(()=>errEl.textContent='',2500);
+      }
+    }};
   }
 }
 document.getElementById('pw-in').addEventListener('keydown',e=>{if(e.key==='Enter')chkPw();});
@@ -518,14 +539,47 @@ async function connect(cfg){
     const existing = getApps().find(a=>a.name===cfg.projectId);
     const app = existing || initializeApp(cfg, cfg.projectId);
     db = getFirestore(app);
+    // If a new admin password was set in the config screen, write it to Firestore
+    if(cfg._pendingAdminPw){
+      const snap = await getDocs(collection(db,'_config'));
+      // Only allow setting if none exists yet, OR if caller is already admin
+      const existing_pw = snap.docs.find(d=>d.id==='admin');
+      if(!existing_pw){
+        await setDoc(doc(db,'_config','admin'),{pw: cfg._pendingAdminPw});
+      } else {
+        // Password already set — don't overwrite silently
+        // Remove the pending pw so it doesn't linger
+      }
+      // Strip pending pw from local storage
+      const clean = {...cfg}; delete clean._pendingAdminPw;
+      localStorage.setItem('atlas_cfg2', JSON.stringify(clean));
+    }
     await seedDefaults();
     listen();
     syncStatus('live','Live — changes sync instantly');
+    // Handle any pending password check that arrived before module loaded
+    if(window._pendingPwCheck){
+      const {v, cb} = window._pendingPwCheck;
+      delete window._pendingPwCheck;
+      checkAdminPw(v, cb);
+    }
   } catch(e){
     syncStatus('err','Firebase error: '+e.message);
     console.error('Firebase error',e);
   }
 }
+
+async function checkAdminPw(v, cb){
+  try{
+    const snap = await getDocs(collection(db,'_config'));
+    const adminDoc = snap.docs.find(d=>d.id==='admin');
+    if(!adminDoc){ cb(false); return; }
+    cb(adminDoc.data().pw === v);
+  } catch(e){ cb(false); }
+}
+
+// Expose to non-module script
+window._checkAdminPw = checkAdminPw;
 
 async function seedDefaults(){
   const snap = await getDocs(collection(db,'map_cats'));
