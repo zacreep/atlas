@@ -422,7 +422,7 @@ function chkPw(){
   errEl.textContent = 'Checking…';
   document.getElementById('pw-in').disabled = true;
 
-  function handleResult(ok){
+  function handleResult(ok, reason){
     document.getElementById('pw-in').disabled = false;
     if(ok){
       sessionStorage.setItem(SESS_KEY, 'admin');
@@ -431,9 +431,15 @@ function chkPw(){
       if(window._onAuth) window._onAuth(true);
       else window._pendingAuth = true;
     } else {
-      errEl.textContent = 'Incorrect password.';
+      // Show real reason in console, generic message on screen
+      if(reason) console.warn('Login failed:', reason);
+      // If it looks like a permissions error, give a helpful message
+      const isPerms = reason && (reason.includes('permission') || reason.includes('Missing') || reason.includes('insufficient'));
+      errEl.textContent = isPerms
+        ? 'Database permission denied — fix Firestore rules (see console)'
+        : 'Incorrect password.';
       document.getElementById('pw-in').value = '';
-      setTimeout(()=>errEl.textContent='', 2500);
+      setTimeout(()=>errEl.textContent='', 5000);
     }
   }
 
@@ -515,16 +521,18 @@ async function connect(startListeners){
 
 async function checkAdminPw(v, cb){
   try{
-    // Wait up to 8s for db to be ready
     let waited = 0;
     while(!db && waited < 8000){ await new Promise(r=>setTimeout(r,100)); waited+=100; }
-    if(!db){ cb(false); return; }
-    const adminRef = doc(db,'_config','admin');
-    const adminSnap = await getDoc(adminRef);
-    if(!adminSnap.exists()){ cb(false); return; }
-    const stored = adminSnap.data().pw;
-    cb(stored === v);
-  } catch(e){ console.error('checkAdminPw error',e); cb(false); }
+    if(!db){ cb(false,'DB not ready'); return; }
+    const adminSnap = await getDoc(doc(db,'_config','admin'));
+    if(!adminSnap.exists()){ cb(false,'No admin doc found — check Firestore has _config/admin with a pw field'); return; }
+    const stored = (adminSnap.data().pw||'').trim();
+    const entered = v.trim();
+    cb(stored === entered, stored === entered ? null : 'Mismatch: stored="'+stored+'" entered="'+entered+'"');
+  } catch(e){
+    console.error('checkAdminPw error',e);
+    cb(false, e.message);
+  }
 }
 
 // Check whether an admin password already exists in Firebase
