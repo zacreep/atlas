@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Atlas</title>
+<style>
+:root{
+  --bg:#0d0f14;--surf:#161a22;--surf2:#1e2330;
+  --bdr:rgba(255,255,255,.08);--bdr2:rgba(255,255,255,.18);
+  --txt:#e8eaf0;--txt2:#8b90a0;
+  --acc:#f0b429;--acc2:#e8833a;
+  --red:#f56565;--grn:#3ecf8e;--blu:#5b8af5;--pur:#a78bfa;--pnk:#f472b6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;display:flex;flex-direction:column;}
+
+/* SCREENS — all visible by default, JS hides/shows them */
+.screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;padding:24px;}
+#cfg-screen{z-index:8888;}
+#pw-screen {z-index:9999;}
+.screen h1{font-size:22px;font-weight:700;letter-spacing:3px;color:var(--acc);text-transform:uppercase;}
+.screen h2{font-size:18px;font-weight:700;color:var(--acc);}
+.screen p{font-size:13px;color:var(--txt2);max-width:480px;text-align:center;line-height:1.6;}
+.pw-box,.cfg-box{display:flex;flex-direction:column;gap:10px;width:100%;max-width:360px;}
+.pw-box input,.cfg-box input{background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;color:var(--txt);font-size:14px;padding:11px 14px;outline:none;text-align:center;}
+.cfg-box input{text-align:left;font-family:monospace;font-size:13px;}
+.pw-box input:focus,.cfg-box input:focus{border-color:var(--acc);}
+.pw-box button,.cfg-box button{background:var(--acc);border:none;border-radius:8px;color:#000;font-size:14px;font-weight:700;padding:11px;cursor:pointer;}
+.pw-box button:hover,.cfg-box button:hover{background:var(--acc2);}
+.err-msg{color:var(--red);font-size:12px;text-align:center;min-height:16px;}
+
+/* SYNC BAR */
+#sync-bar{position:fixed;bottom:0;left:0;right:0;height:26px;background:var(--surf);border-top:1px solid var(--bdr);display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;color:var(--txt2);z-index:500;}
+.sync-dot{width:7px;height:7px;border-radius:50%;}
+.sync-dot.live{background:var(--grn);}
+.sync-dot.spin{background:var(--acc);animation:pulse 1s infinite;}
+.sync-dot.err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+#admin-badge{position:fixed;top:52px;right:12px;background:var(--acc);color:#000;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.5px;z-index:400;display:none;}
+
+/* NAV */
+nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px solid var(--bdr);padding:0 16px;height:48px;flex-shrink:0;z-index:100;}
+.brand{font-size:15px;font-weight:700;letter-spacing:2px;color:var(--acc);text-transform:uppercase;margin-right:20px;}
+.t-btn{background:none;border:none;color:var(--txt2);font-size:12px;font-weight:600;padding:0 14px;height:48px;cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.6px;text-transform:uppercase;}
+.t-btn:hover{color:var(--txt);}
+.t-btn.on{color:var(--acc);border-bottom-color:var(--acc);}
+.spacer{flex:1;}
+.nav-sm{background:none;border:none;color:var(--txt2);font-size:11px;padding:0 10px;height:48px;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;}
+.nav-sm:hover{color:var(--txt);}
+
+/* LAYOUT */
+#app{display:none;flex:1;flex-direction:column;overflow:hidden;padding-bottom:26px;}
+.tab-row{display:flex;flex:1;overflow:hidden;}
+.panel{display:none;flex:1;overflow:hidden;}
+.panel.on{display:flex;}
+
+/* SIDEBAR */
+.sidebar{width:268px;background:var(--surf);border-right:1px solid var(--bdr);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+.sb-head{padding:11px 13px 9px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:7px;}
+.sb-head h2{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt2);flex:1;}
+.icon-btn{background:none;border:1px solid var(--bdr);border-radius:5px;color:var(--txt2);font-size:13px;width:26px;height:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s;flex-shrink:0;}
+.icon-btn:hover{border-color:var(--bdr2);color:var(--txt);background:var(--surf2);}
+.sb-search{margin:7px 9px;position:relative;}
+.sb-search input{width:100%;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;color:var(--txt);font-size:13px;padding:7px 9px 7px 28px;outline:none;}
+.sb-search input:focus{border-color:var(--bdr2);}
+.sb-search::before{content:"⌕";position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--txt2);font-size:15px;pointer-events:none;}
+.sb-body{flex:1;overflow-y:auto;padding:5px 0;}
+.sb-body::-webkit-scrollbar{width:4px;}
+.sb-body::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px;}
+.add-btn-row{padding:9px 12px;border-top:1px solid var(--bdr);}
+.add-btn{width:100%;background:var(--acc);border:none;border-radius:6px;color:#000;font-size:12px;font-weight:700;padding:8px;cursor:pointer;}
+.add-btn:hover{background:var(--acc2);}
+
+/* MAP CATEGORIES */
+.cat-group{margin-bottom:2px;}
+.cat-hdr{display:flex;align-items:center;gap:6px;padding:6px 10px;cursor:pointer;user-select:none;border-radius:6px;margin:0 4px;transition:background .1s;}
+.cat-hdr:hover{background:var(--surf2);}
+.cat-hdr:hover .cat-edit{opacity:1;}
+.tog{width:30px;height:17px;border-radius:9px;border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
+.tog.on{background:var(--acc);} .tog.off{background:var(--bdr2);}
+.tog::after{content:"";position:absolute;width:11px;height:11px;border-radius:50%;background:#fff;top:3px;transition:left .2s;}
+.tog.on::after{left:16px;} .tog.off::after{left:3px;}
+.cat-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.cat-lbl{font-size:13px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cat-cnt{font-size:11px;color:var(--txt2);flex-shrink:0;}
+.cat-chev{font-size:9px;color:var(--txt2);transition:transform .2s;flex-shrink:0;}
+.cat-group.open .cat-chev{transform:rotate(90deg);}
+.cat-edit{background:none;border:none;color:var(--txt2);font-size:11px;cursor:pointer;opacity:0;padding:2px 3px;border-radius:4px;flex-shrink:0;}
+.cat-edit:hover{color:var(--txt);}
+.pt-list{display:none;padding:2px 4px 4px;}
+.cat-group.open .pt-list{display:block;}
+.pt-item{display:flex;align-items:center;gap:6px;padding:5px 9px 5px 28px;cursor:pointer;border-radius:6px;font-size:12px;color:var(--txt2);transition:background .1s;}
+.pt-item:hover,.pt-item.sel{background:var(--surf2);color:var(--txt);}
+
+/* MAP */
+.map-wrap{flex:1;position:relative;overflow:hidden;cursor:grab;background:#0a1520;}
+.map-wrap.grab{cursor:grabbing;}
+#map-container{position:absolute;transform-origin:0 0;}
+#map-img{display:block;user-select:none;pointer-events:none;}
+#pin-overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden;}
+.pin{position:absolute;width:0;height:0;pointer-events:all;cursor:pointer;}
+.pin-marker{position:absolute;width:36px;height:36px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid rgba(255,255,255,.4);box-shadow:0 2px 10px rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;transition:transform .15s;left:-18px;top:-44px;}
+.pin:hover .pin-marker{transform:rotate(-45deg) scale(1.18);}
+.pin-emoji{transform:rotate(45deg);font-size:15px;line-height:1;}
+.pin.hide{display:none;}
+.zoom-ctrl{position:absolute;bottom:18px;right:18px;display:flex;flex-direction:column;gap:4px;z-index:20;}
+.z-btn{width:35px;height:35px;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;color:var(--txt);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.z-btn:hover{background:var(--surf2);}
+.map-coords{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(13,15,20,.85);border:1px solid var(--bdr);border-radius:6px;padding:4px 11px;font-size:11px;color:var(--txt2);font-family:monospace;z-index:20;pointer-events:none;}
+.shift-hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(13,15,20,.92);border:1px solid var(--acc);border-radius:6px;padding:5px 13px;font-size:11px;color:var(--acc);z-index:20;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap;}
+.shift-hint.on{opacity:1;}
+
+/* POINT DETAIL */
+.pt-detail{position:absolute;right:18px;top:18px;width:285px;background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;z-index:30;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.5);display:none;}
+.pt-detail.on{display:block;}
+.pd-head{padding:12px 13px;display:flex;align-items:flex-start;gap:9px;border-bottom:1px solid var(--bdr);}
+.pd-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.pd-title{font-size:14px;font-weight:600;line-height:1.3;flex:1;}
+.pd-cat{font-size:11px;color:var(--txt2);margin-top:2px;}
+.pd-close{background:none;border:none;color:var(--txt2);font-size:18px;cursor:pointer;padding:0;line-height:1;}
+.pd-body{padding:12px 13px;font-size:13px;color:var(--txt2);line-height:1.6;max-height:260px;overflow-y:auto;}
+.pd-img{width:100%;border-radius:6px;margin-bottom:9px;object-fit:cover;max-height:150px;}
+.pd-actions{display:flex;padding:9px 13px;border-top:1px solid var(--bdr);}
+.pd-del{background:none;border:1px solid var(--red);color:var(--red);font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer;margin-left:auto;}
+.pd-del:hover{background:var(--red);color:#fff;}
+.linked-pill{display:inline-flex;align-items:center;gap:4px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:20px;font-size:11px;padding:3px 9px;margin:2px 3px 2px 0;cursor:pointer;}
+.linked-pill:hover{border-color:var(--acc);color:var(--acc);}
+
+/* LIST PANELS */
+.list-detail{flex:1;overflow-y:auto;padding:26px 30px;}
+.list-detail::-webkit-scrollbar{width:4px;}
+.list-detail::-webkit-scrollbar-thumb{background:var(--bdr2);border-radius:2px;}
+.list-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--txt2);gap:10px;}
+.list-empty-icon{font-size:46px;opacity:.25;}
+.list-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;margin-bottom:2px;transition:background .1s;}
+.list-item:hover{background:var(--surf2);}
+.list-item.sel{background:var(--surf2);border-color:var(--bdr2);}
+.li-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.li-name{font-size:13px;font-weight:500;} .li-sub{font-size:11px;color:var(--txt2);}
+.li-badge{font-size:11px;color:var(--txt2);margin-left:auto;flex-shrink:0;}
+.pill-bar{display:flex;gap:5px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--bdr);}
+.pill{background:var(--surf2);border:1px solid var(--bdr);border-radius:20px;font-size:11px;color:var(--txt2);padding:3px 10px;cursor:pointer;display:flex;align-items:center;gap:4px;}
+.pill:hover{border-color:var(--bdr2);color:var(--txt);}
+.pill.on{background:var(--acc);border-color:var(--acc);color:#000;font-weight:600;}
+.pill-edit{font-size:10px;opacity:.6;cursor:pointer;} .pill-edit:hover{opacity:1;}
+
+/* DETAIL */
+.det-head{display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--bdr);}
+.det-icon{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px;}
+.det-title{font-size:21px;font-weight:700;} .det-sub{font-size:13px;color:var(--txt2);margin-top:3px;}
+.det-actions{margin-left:auto;display:flex;gap:7px;}
+.det-del{background:none;border:1px solid var(--red);color:var(--red);font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer;}
+.det-del:hover{background:var(--red);color:#fff;}
+.stat-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;}
+.stat-box{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px 13px;flex:1;min-width:80px;}
+.stat-lbl{font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;}
+.stat-val{font-size:15px;font-weight:600;}
+.sec-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt2);margin-bottom:9px;}
+.ing-list{display:flex;flex-direction:column;gap:6px;margin-bottom:20px;}
+.ing{display:flex;align-items:center;gap:10px;background:var(--surf);border:1px solid var(--bdr);border-radius:7px;padding:8px 12px;}
+.ing-ico{font-size:19px;width:30px;text-align:center;} .ing-name{flex:1;font-size:13px;}
+.ing-qty{font-size:12px;color:var(--txt2);background:var(--surf2);border-radius:4px;padding:2px 7px;}
+.steps{display:flex;flex-direction:column;gap:6px;margin-bottom:20px;}
+.step{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdr);}
+.step:last-child{border:none;}
+.step-n{width:20px;height:20px;border-radius:50%;background:var(--acc);color:#000;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.step-t{font-size:13px;color:var(--txt2);line-height:1.6;}
+.trade-list{display:flex;flex-direction:column;gap:6px;margin-bottom:20px;}
+.trade{display:flex;align-items:center;gap:10px;background:var(--surf);border:1px solid var(--bdr);border-radius:7px;padding:9px 12px;}
+.trade-give{flex:1;font-size:13px;} .trade-arrow{color:var(--txt2);font-size:14px;} .trade-get{flex:1;font-size:13px;text-align:right;}
+.pin-links{margin-bottom:20px;}
+.pin-link-item{display:inline-flex;align-items:center;gap:5px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:20px;font-size:12px;padding:4px 10px;margin:2px 3px 2px 0;cursor:pointer;}
+.pin-link-item:hover{border-color:var(--acc);color:var(--acc);}
+
+/* MODALS */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:none;align-items:center;justify-content:center;}
+.overlay.on{display:flex;}
+.modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;width:420px;max-height:86vh;overflow-y:auto;display:flex;flex-direction:column;}
+.modal.sm{width:340px;} .modal.lg{width:500px;}
+.mod-head{padding:15px 17px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surf);z-index:1;}
+.mod-head h3{font-size:15px;font-weight:600;}
+.x-btn{background:none;border:none;color:var(--txt2);font-size:19px;cursor:pointer;line-height:1;}
+.x-btn:hover{color:var(--txt);}
+.mod-body{padding:17px;display:flex;flex-direction:column;gap:12px;}
+.mod-foot{padding:12px 17px;border-top:1px solid var(--bdr);display:flex;gap:8px;justify-content:flex-end;position:sticky;bottom:0;background:var(--surf);}
+.lbl{display:block;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--txt2);margin-bottom:4px;}
+.inp,.sel,.ta{width:100%;background:var(--surf2);border:1px solid var(--bdr);border-radius:6px;color:var(--txt);font-size:13px;padding:8px 10px;outline:none;font-family:inherit;}
+.inp:focus,.sel:focus,.ta:focus{border-color:var(--acc);}
+.ta{resize:vertical;min-height:70px;}
+.row2{display:flex;gap:10px;} .row2>*{flex:1;}
+.hint-box{font-size:12px;color:var(--txt2);background:var(--surf2);border-radius:6px;padding:8px 10px;}
+.btn-d{background:var(--red);border:none;color:#fff;font-size:13px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer;margin-right:auto;}
+.btn-c{background:none;border:1px solid var(--bdr2);color:var(--txt);font-size:13px;padding:7px 14px;border-radius:6px;cursor:pointer;}
+.btn-c:hover{background:var(--surf2);}
+.btn-s{background:var(--acc);border:none;color:#000;font-size:13px;font-weight:600;padding:7px 14px;border-radius:6px;cursor:pointer;}
+.clr-row{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+.clr-sw{width:25px;height:25px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .1s;}
+.clr-sw:hover,.clr-sw.on{border-color:#fff;transform:scale(1.15);}
+.em-grid{display:flex;gap:5px;flex-wrap:wrap;}
+.em-opt{font-size:17px;cursor:pointer;padding:4px 5px;border-radius:5px;border:1px solid transparent;}
+.em-opt:hover{background:var(--surf2);border-color:var(--bdr);}
+.em-opt.on{background:var(--surf2);border-color:var(--acc);}
+.link-opts{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto;}
+.link-opt{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;}
+.link-opt:hover{background:var(--surf2);}
+.link-opt input[type=checkbox]{accent-color:var(--acc);}
+.pd-img{background:var(--surf2);}
+/* Pin pick mode */
+.pin-pick-overlay{position:absolute;inset:0;z-index:50;cursor:crosshair;}
+.pin-pick-banner{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--acc);color:#000;font-size:12px;font-weight:700;padding:7px 16px;border-radius:7px;z-index:60;white-space:nowrap;display:flex;align-items:center;gap:10px;}
+.pin-pick-banner button{background:rgba(0,0,0,.2);border:none;color:#000;font-size:11px;font-weight:700;padding:3px 9px;border-radius:4px;cursor:pointer;}
+.pin.pick-highlight .pin-marker{box-shadow:0 0 0 4px var(--acc),0 2px 10px rgba(0,0,0,.55);transform:rotate(-45deg) scale(1.3);}
+.pin.pick-selected .pin-marker{box-shadow:0 0 0 4px var(--grn),0 2px 10px rgba(0,0,0,.55);}
+/* Highlight pins linked to selected craft */
+.pin.craft-linked .pin-marker{box-shadow:0 0 0 4px var(--acc),0 2px 10px rgba(0,0,0,.55);}
+.pin.craft-linked{animation:bob .6s ease-in-out infinite alternate;}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-6px)}}
+</style>
+</head>
+<body>
+
+<!-- config screen removed — credentials hardcoded -->
+
+<!-- PASSWORD SCREEN -->
+<div class="screen" id="pw-screen" style="display:none;">
+  <h1>Atlas</h1>
+  <p>Enter password to continue</p>
+  <div class="pw-box">
+    <input type="password" id="pw-in" placeholder="••••••••••">
+    <button onclick="chkPw()">Enter</button>
+    <div class="err-msg" id="pw-err"></div>
+
+  </div>
+</div>
+
+
+<!-- APP -->
+<div id="app" style="display:none;flex:1;flex-direction:column;overflow:hidden;padding-bottom:26px;">
+<nav>
+  <div class="brand">Atlas</div>
+  <button class="t-btn on" id="nav-map"    onclick="showTab('map',this)">🗺 Map</button>
+  <button class="t-btn"    id="nav-craft"  onclick="showTab('craft',this)">⚒ Crafting</button>
+  <button class="t-btn"    id="nav-vendor" onclick="showTab('vendor',this)">🏪 Vendors</button>
+  <div class="spacer"></div>
+
+  <button class="nav-sm" onclick="hardReset()" style="color:var(--red)">↺ Reset</button>
+</nav>
+<div class="tab-row">
+
+<!-- MAP -->
+<div class="panel on" id="panel-map">
+  <div class="sidebar">
+    <div class="sb-head"><h2>Layers</h2><button class="icon-btn" onclick="openCatMod('map')">+</button></div>
+    <div class="sb-search"><input type="text" placeholder="Search points…" id="pt-search" oninput="filterPts()"></div>
+    <div class="sb-body" id="cat-list"></div>
+    <div class="add-btn-row"><button class="add-btn" onclick="openPtMod()">+ Add Point</button></div>
+  </div>
+  <div class="map-wrap" id="map-wrap">
+    <div id="map-container"><img id="map-img" src="map.jpg" draggable="false" alt=""></div>
+    <div id="pin-overlay"></div>
+    <div class="zoom-ctrl">
+      <button class="z-btn" onclick="zm(1.3)">+</button>
+      <button class="z-btn" onclick="zm(.77)">−</button>
+      <button class="z-btn" onclick="resetV()" style="font-size:13px">⌂</button>
+    </div>
+    <div class="map-coords" id="m-coords">0%, 0%</div>
+    <div class="shift-hint" id="sh-hint">📍 Shift+click to place pin</div>
+    <div class="pt-detail" id="pt-detail">
+      <div class="pd-head">
+        <div class="pd-icon" id="pd-icon"></div>
+        <div style="flex:1"><div class="pd-title" id="pd-title"></div><div class="pd-cat" id="pd-cat"></div></div>
+        <button class="pd-close" onclick="closePtDetail()">×</button>
+      </div>
+      <div class="pd-body" id="pd-body"></div>
+      <div class="pd-actions" id="pd-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CRAFT -->
+<div class="panel" id="panel-craft">
+  <div class="sidebar">
+    <div class="sb-head"><h2>Recipes</h2><button class="icon-btn" onclick="openCatMod('craft')">+</button></div>
+    <div class="sb-search"><input type="text" placeholder="Search…" id="cr-search" oninput="renderCraftList()"></div>
+    <div class="pill-bar" id="cr-pills"></div>
+    <div class="sb-body" id="cr-list"></div>
+    <div class="add-btn-row"><button class="add-btn" onclick="openCraftMod()">+ Add Recipe</button></div>
+  </div>
+  <div class="list-detail" id="cr-detail"><div class="list-empty"><div class="list-empty-icon">⚒</div><p>Select a recipe</p></div></div>
+</div>
+
+<!-- VENDOR -->
+<div class="panel" id="panel-vendor">
+  <div class="sidebar">
+    <div class="sb-head"><h2>Vendors</h2><button class="icon-btn" onclick="openCatMod('vendor')">+</button></div>
+    <div class="sb-search"><input type="text" placeholder="Search…" id="vn-search" oninput="renderVendorList()"></div>
+    <div class="pill-bar" id="vn-pills"></div>
+    <div class="sb-body" id="vn-list"></div>
+    <div class="add-btn-row"><button class="add-btn" onclick="openVendorMod()">+ Add Vendor</button></div>
+  </div>
+  <div class="list-detail" id="vn-detail"><div class="list-empty"><div class="list-empty-icon">🏪</div><p>Select a vendor</p></div></div>
+</div>
+
+</div><!-- tab-row -->
+</div><!-- app -->
+
+<!-- SYNC BAR -->
+<div id="sync-bar">
+  <div class="sync-dot spin" id="sync-dot"></div>
+  <span id="sync-txt">Connecting…</span>
+</div>
+
+<!-- MODALS -->
+<div class="overlay" id="cat-mod"><div class="modal sm">
+  <div class="mod-head"><h3 id="cat-mod-title">Category</h3><button class="x-btn" onclick="closeCatMod()">×</button></div>
+  <div class="mod-body">
+    <div><label class="lbl">Name</label><input class="inp" id="cat-name" placeholder="Category name"></div>
+    <div><label class="lbl">Emoji</label><div class="em-grid" id="em-grid"></div><input class="inp" id="cat-em-custom" placeholder="Or type any emoji" maxlength="4" style="margin-top:7px"></div>
+    <div><label class="lbl">Color</label><div class="clr-row" id="clr-row"></div></div>
+  </div>
+  <div class="mod-foot">
+    <button class="btn-d" id="cat-del-btn" onclick="delCat()" style="display:none">Delete</button>
+    <button class="btn-c" onclick="closeCatMod()">Cancel</button>
+    <button class="btn-s" onclick="saveCat()">Save</button>
+  </div>
+</div></div>
+
+<div class="overlay" id="pt-mod"><div class="modal">
+  <div class="mod-head"><h3 id="pt-mod-title">Map Point</h3><button class="x-btn" onclick="closePtMod()">×</button></div>
+  <div class="mod-body">
+    <div class="hint-box" id="pt-mod-hint">💡 Hold <b>Shift</b> and click the map to auto-fill coordinates.</div>
+    <div><label class="lbl">Name</label><input class="inp" id="pt-name" placeholder="Point name"></div>
+    <div><label class="lbl">Category</label><select class="sel" id="pt-cat"></select></div>
+    <div class="row2">
+      <div><label class="lbl">X (0–100%)</label><input class="inp" type="number" id="pt-x" min="0" max="100" step=".01" placeholder="50"></div>
+      <div><label class="lbl">Y (0–100%)</label><input class="inp" type="number" id="pt-y" min="0" max="100" step=".01" placeholder="50"></div>
+    </div>
+    <div><label class="lbl">Description</label><textarea class="ta" id="pt-desc" placeholder="Notes…"></textarea></div>
+    <div>
+      <label class="lbl">Image URLs (one per line)</label>
+      <textarea class="ta" id="pt-imgs" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg" style="min-height:80px"></textarea>
+      <div style="font-size:11px;color:var(--txt2);margin-top:4px">Add as many image URLs as you want, one per line.</div>
+    </div>
+  </div>
+  <div class="mod-foot"><button class="btn-c" onclick="closePtMod()">Cancel</button><button class="btn-s" id="pt-save-btn" onclick="savePt()">Save</button></div>
+</div></div>
+
+<div class="overlay" id="cr-mod"><div class="modal lg">
+  <div class="mod-head"><h3>Recipe</h3><button class="x-btn" onclick="closeCraftMod()">×</button></div>
+  <div class="mod-body">
+    <div><label class="lbl">Name</label><input class="inp" id="cr-name" placeholder="Recipe name"></div>
+    <div class="row2">
+      <div><label class="lbl">Icon (emoji)</label><input class="inp" id="cr-icon" placeholder="⚒" maxlength="4"></div>
+      <div><label class="lbl">Category</label><select class="sel" id="cr-cat-sel"></select></div>
+    </div>
+    <div class="row2">
+      <div><label class="lbl">Level Required</label><input class="inp" type="number" id="cr-lvl" placeholder="1" min="1"></div>
+      <div><label class="lbl">Craft Time</label><input class="inp" id="cr-time" placeholder="30 min"></div>
+    </div>
+    <div><label class="lbl">Item Cost (one per line: "Qty × Item")</label><textarea class="ta" id="cr-ing" placeholder="2 × Iron Ore&#10;1 × Coal" style="min-height:90px"></textarea></div>
+    <div>
+      <label class="lbl">Linked Map Pins</label>
+      <div class="hint-box" style="margin-bottom:7px">Click pins directly on the map, or check them below. <button onclick="enterPinPickMode()" style="background:var(--acc);border:none;color:#000;font-size:11px;font-weight:700;padding:3px 9px;border-radius:4px;cursor:pointer;margin-left:6px">🗺 Pick on Map</button></div>
+      <div class="link-opts" id="cr-pin-opts"></div>
+    </div>
+  </div>
+  <div class="mod-foot"><button class="btn-c" onclick="closeCraftMod()">Cancel</button><button class="btn-s" onclick="saveCraft()">Save</button></div>
+</div></div>
+
+<div class="overlay" id="vn-mod"><div class="modal lg">
+  <div class="mod-head"><h3>Vendor</h3><button class="x-btn" onclick="closeVendorMod()">×</button></div>
+  <div class="mod-body">
+    <div><label class="lbl">Vendor Name</label><input class="inp" id="vn-name" placeholder="Vendor name"></div>
+    <div class="row2">
+      <div><label class="lbl">Icon (emoji)</label><input class="inp" id="vn-icon" placeholder="🏪" maxlength="4"></div>
+      <div><label class="lbl">Category</label><select class="sel" id="vn-cat-sel"></select></div>
+    </div>
+    <div><label class="lbl">Description / Location Notes</label><textarea class="ta" id="vn-desc" placeholder="Notes…"></textarea></div>
+    <div><label class="lbl">Trades (one per line: "Give → Get")</label><textarea class="ta" id="vn-trades" placeholder="3 × Wood → 1 × Plank&#10;Gold → Ammo" style="min-height:100px"></textarea></div>
+    <div><label class="lbl">Linked Map Pins</label><div class="link-opts" id="vn-pin-opts"></div></div>
+  </div>
+  <div class="mod-foot"><button class="btn-c" onclick="closeVendorMod()">Cancel</button><button class="btn-s" onclick="saveVendor()">Save</button></div>
+</div></div>
+
+<!-- REGULAR (non-module) script first — handles screen routing safely -->
+<script>
+const READ_PW  = 'naontop123';
+const SESS_KEY = 'atlas_sess2';
+const FB_CFG   = {
+  apiKey:            'AIzaSyDAYUxBmUtdD1kzolh7qsLvojezmE1M46k',
+  authDomain:        'atlas-e6812.firebaseapp.com',
+  projectId:         'atlas-e6812',
+  storageBucket:     'atlas-e6812.firebasestorage.app',
+  messagingSenderId: '843969660887',
+  appId:             '1:843969660887:web:bfc484c0d79b1059566d92',
+};
+window.FB_CFG = FB_CFG;
+
+function show(id){document.getElementById(id).style.display='flex';}
+function hide(id){document.getElementById(id).style.display='none';}
+
+// Show correct screen immediately
+(function(){
+  const sess = sessionStorage.getItem(SESS_KEY);
+  if(sess === 'authed'){
+    show('app');
+  } else {
+    show('pw-screen');
+  }
+})();
+
+function chkPw(){
+  const v = document.getElementById('pw-in').value.trim();
+  const errEl = document.getElementById('pw-err');
+  if(!v) return;
+  if(v === READ_PW){
+    sessionStorage.setItem(SESS_KEY, 'authed');
+    hide('pw-screen'); show('app');
+    if(window._onAuth) window._onAuth();
+    else window._pendingAuth = true;
+  } else {
+    errEl.textContent = 'Incorrect password.';
+    document.getElementById('pw-in').value = '';
+    setTimeout(()=>errEl.textContent='', 2500);
+  }
+}
+document.getElementById('pw-in').addEventListener('keydown',e=>{if(e.key==='Enter')chkPw();});
+
+function hardReset(){
+  if(!confirm('Reset view? Firebase data is NOT deleted.'))return;
+  sessionStorage.clear(); location.reload();
+}
+
+function syncStatus(state, msg){
+  document.getElementById('sync-dot').className='sync-dot '+state;
+  document.getElementById('sync-txt').textContent=msg;
+}
+
+// Global UI helpers used by module
+window.showTab=function(name,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.t-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('panel-'+name).classList.add('on');
+  btn.classList.add('on');
+};
+</script>
+
+<!-- Firebase module — loads async, communicates via window callbacks -->
+<script type="module">
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, doc, onSnapshot, setDoc, deleteDoc, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const PC=['#5b8af5','#3ecf8e','#f0b429','#f56565','#a78bfa','#f472b6','#e8833a','#22d3ee','#84cc16','#94a3b8','#fff'];
+const PE=['📍','⭐','💎','🚗','⚠️','📝','🏴','🔥','💀','🏠','🗡️','🛡️','🎯','🏆','🔑','💣','🧪','🗺️','🐉','💰'];
+
+let db=null;
+let MAP_CATS=[], catTog={}, POINTS=[], CRAFT_CATS=[], CRAFTS=[], VENDOR_CATS=[], VENDORS=[];
+let selCraft=null, selVendor=null, crFilter='all', vnFilter='all';
+let sx=1, ox=0, oy=0, drag=false, dsx,dsy,dox,doy;
+let ecatType=null, ecatId=null, eSelC='#5b8af5', eSelE='📍';
+
+// ── FIREBASE ──
+async function connect(startListeners){
+  try{
+    syncStatus('spin','Connecting…');
+    const cfg = window.FB_CFG;
+    const existing = getApps().find(a=>a.name===cfg.projectId);
+    const app = existing || initializeApp(cfg, cfg.projectId);
+    db = getFirestore(app);
+    if(startListeners){
+      await seedDefaults();
+      listen();
+      syncStatus('live','Live — changes sync instantly');
+    } else {
+      syncStatus('live','Connected');
+    }
+
+  } catch(e){
+    syncStatus('err','Firebase error: '+e.message);
+    console.error('Firebase error',e);
+  }
+}
+
+// Expose FB_CFG reference
+window.FB_CFG = window.FB_CFG;
+
+async function seedDefaults(){
+  const snap = await getDocs(collection(db,'map_cats'));
+  if(snap.empty){
+    const defs=[
+      {id:'loc',name:'Locations',color:'#5b8af5',emoji:'📍'},
+      {id:'mis',name:'Missions',color:'#f0b429',emoji:'⭐'},
+      {id:'col',name:'Collectibles',color:'#3ecf8e',emoji:'💎'},
+      {id:'veh',name:'Vehicles',color:'#a78bfa',emoji:'🚗'},
+      {id:'dan',name:'Dangers',color:'#f56565',emoji:'⚠️'},
+      {id:'note',name:'Notes',color:'#f472b6',emoji:'📝'},
+    ];
+    for(const d of defs) await setDoc(doc(db,'map_cats',d.id),d);
+  }
+  const cs=await getDocs(collection(db,'craft_cats'));
+  if(cs.empty) await setDoc(doc(db,'craft_cats','cc1'),{id:'cc1',name:'General',color:'#5b8af5',emoji:'⚒'});
+  const vs=await getDocs(collection(db,'vendor_cats'));
+  if(vs.empty) await setDoc(doc(db,'vendor_cats','vc1'),{id:'vc1',name:'General',color:'#3ecf8e',emoji:'🏪'});
+}
+
+function listen(){
+  onSnapshot(collection(db,'map_cats'),s=>{MAP_CATS=s.docs.map(d=>d.data());MAP_CATS.forEach(c=>{if(catTog[c.id]===undefined)catTog[c.id]=true;});buildMapSidebar();rebuildPins();});
+  onSnapshot(collection(db,'points'),  s=>{POINTS=s.docs.map(d=>d.data());buildMapSidebar();rebuildPins();});
+  onSnapshot(collection(db,'craft_cats'),s=>{CRAFT_CATS=s.docs.map(d=>d.data());buildCrPills();renderCraftList();});
+  onSnapshot(collection(db,'crafts'),  s=>{CRAFTS=s.docs.map(d=>d.data());renderCraftList();if(selCraft)selectCraft(selCraft);});
+  onSnapshot(collection(db,'vendor_cats'),s=>{VENDOR_CATS=s.docs.map(d=>d.data());buildVnPills();renderVendorList();});
+  onSnapshot(collection(db,'vendors'), s=>{VENDORS=s.docs.map(d=>d.data());renderVendorList();if(selVendor)selectVendor(selVendor);});
+}
+
+function uid(){return Date.now()+'_'+Math.random().toString(36).slice(2,7);}
+async function dbSet(col,id,data){await setDoc(doc(db,col,id),data);}
+async function dbDel(col,id){await deleteDoc(doc(db,col,id));}
+
+// ── AUTH CALLBACKS (called by non-module script) ──
+function onAuth(){
+  initMap();
+  if(db){
+    seedDefaults().then(()=>{ listen(); syncStatus('live','Live — changes sync instantly'); });
+  } else {
+    connect(true);
+  }
+}
+
+
+
+// Register callbacks so non-module script can call us
+window._onAuth = onAuth;
+
+// If auth already happened before module loaded (session restore path)
+if(window._pendingAuth !== undefined){
+  onAuth();
+  delete window._pendingAuth;
+} else {
+  // Session was already restored by non-module script
+  const sess = sessionStorage.getItem('atlas_sess2');
+  if(sess==='authed'){
+    onAuth();
+  }
+}
+
+// ── MAP ──
+function imgW(){const i=document.getElementById('map-img');return i.naturalWidth||1024;}
+function imgH(){const i=document.getElementById('map-img');return i.naturalHeight||1024;}
+function p2s(px,py){return{x:ox+px/100*imgW()*sx,y:oy+py/100*imgH()*sx};}
+function s2p(x,y){return{x:(x-ox)/(imgW()*sx)*100,y:(y-oy)/(imgH()*sx)*100};}
+
+function applyT(){
+  const c=document.getElementById('map-container');
+  c.style.transform=`translate(${ox}px,${oy}px) scale(${sx})`;
+  c.style.transformOrigin='0 0';
+  c.style.width=imgW()+'px'; c.style.height=imgH()+'px';
+  movePins();
+}
+function movePins(){
+  document.querySelectorAll('.pin').forEach(el=>{
+    const s=p2s(parseFloat(el.dataset.px),parseFloat(el.dataset.py));
+    el.style.left=s.x+'px'; el.style.top=s.y+'px';
+  });
+}
+window.resetV=function(){
+  if(!imgW() || !imgH()) return; // image not loaded yet
+  const w=document.getElementById('map-wrap');
+  if(!w.clientWidth) return; // panel not visible yet
+  sx=Math.min(w.clientWidth/imgW(),w.clientHeight/imgH())*.9;
+  ox=(w.clientWidth-imgW()*sx)/2; oy=(w.clientHeight-imgH()*sx)/2;
+  applyT();
+};
+window.zm=function(f,cx,cy){
+  const w=document.getElementById('map-wrap');
+  if(cx===undefined){cx=w.clientWidth/2;cy=w.clientHeight/2;}
+  const old=sx; sx=Math.min(12,Math.max(.04,sx*f));
+  const r=sx/old; ox=cx-r*(cx-ox); oy=cy-r*(cy-oy); applyT();
+};
+
+function initMap(){
+  const w=document.getElementById('map-wrap');
+  let shift=false;
+  window.addEventListener('keydown',e=>{if(e.key==='Shift'){shift=true;document.getElementById('sh-hint').classList.add('on');}});
+  window.addEventListener('keyup',  e=>{if(e.key==='Shift'){shift=false;document.getElementById('sh-hint').classList.remove('on');}});
+  w.addEventListener('mousedown',e=>{
+    if(shift){const r=w.getBoundingClientRect();const p=s2p(e.clientX-r.left,e.clientY-r.top);openPtMod(p.x.toFixed(2),p.y.toFixed(2));return;}
+    drag=true;dsx=e.clientX;dsy=e.clientY;dox=ox;doy=oy;w.classList.add('grab');
+  });
+  window.addEventListener('mousemove',e=>{
+    const r=w.getBoundingClientRect();
+    const p=s2p(e.clientX-r.left,e.clientY-r.top);
+    document.getElementById('m-coords').textContent=`${p.x.toFixed(2)}%, ${p.y.toFixed(2)}%`;
+    if(!drag)return;
+    ox=dox+(e.clientX-dsx); oy=doy+(e.clientY-dsy); applyT();
+  });
+  window.addEventListener('mouseup',()=>{drag=false;document.getElementById('map-wrap').classList.remove('grab');});
+  w.addEventListener('wheel',e=>{e.preventDefault();const r=w.getBoundingClientRect();window.zm(e.deltaY<0?1.15:.87,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+  // Robust image-ready check — handles cached, mid-load, and slow cases
+  const img = document.getElementById('map-img');
+  function onImgReady(){
+    if(img.naturalWidth > 0) window.resetV();
+  }
+  img.addEventListener('load', onImgReady);
+  // Poll in case load event already fired before listener was attached
+  const imgPoll = setInterval(()=>{
+    if(img.naturalWidth > 0){ clearInterval(imgPoll); onImgReady(); }
+  }, 50);
+}
+
+// ── MAP SIDEBAR ──
+function buildMapSidebar(){
+  const el=document.getElementById('cat-list'); el.innerHTML='';
+  MAP_CATS.forEach(cat=>{
+    const pts=POINTS.filter(p=>p.cat===cat.id);
+    const on=catTog[cat.id]!==false;
+    const g=document.createElement('div');
+    g.className='cat-group'; g.id='cg-'+cat.id;
+    g.innerHTML=`<div class="cat-hdr" onclick="togCatExp('${cat.id}')">
+      <button class="tog ${on?'on':'off'}" id="tog-${cat.id}" onclick="event.stopPropagation();togCat('${cat.id}')"></button>
+      <div class="cat-dot" style="background:${cat.color}"></div>
+      <span class="cat-lbl">${cat.name}</span><span class="cat-cnt">${pts.length}</span>
+      <button class="cat-edit" onclick="event.stopPropagation();openCatMod('map','${cat.id}')">✏️</button>
+      <span class="cat-chev">▶</span>
+    </div>
+    <div class="pt-list" id="pl-${cat.id}">
+      ${pts.map(p=>`<div class="pt-item" id="pi-${p.id}" onclick="selectPt('${p.id}')">${cat.emoji} ${p.name}</div>`).join('')}
+    </div>`;
+    el.appendChild(g);
+  });
+}
+window.togCatExp=id=>document.getElementById('cg-'+id)?.classList.toggle('open');
+window.togCat=id=>{
+  catTog[id]=catTog[id]===false;
+  document.getElementById('tog-'+id).className='tog '+(catTog[id]===false?'off':'on');
+  document.querySelectorAll('.pin').forEach(el=>{if(el.dataset.cat===id)el.classList.toggle('hide',catTog[id]===false);});
+};
+window.filterPts=()=>{
+  const q=document.getElementById('pt-search').value.toLowerCase();
+  POINTS.forEach(p=>{const e=document.getElementById('pi-'+p.id);if(e)e.style.display=p.name.toLowerCase().includes(q)?'':'none';});
+};
+
+// ── PINS ──
+function rebuildPins(){
+  document.getElementById('pin-overlay').innerHTML='';
+  POINTS.forEach(addPin);
+}
+function addPin(p){
+  const cat=MAP_CATS.find(c=>c.id===p.cat); if(!cat)return;
+  const s=p2s(p.x,p.y);
+  const el=document.createElement('div');
+  el.className='pin'+(catTog[p.cat]===false?' hide':'');
+  el.id='pin-'+p.id;
+  el.dataset.px=p.x; el.dataset.py=p.y; el.dataset.id=p.id; el.dataset.cat=p.cat;
+  el.style.left=s.x+'px'; el.style.top=s.y+'px';
+  el.innerHTML=`<div class="pin-marker" style="background:${cat.color}"><span class="pin-emoji">${cat.emoji}</span></div>`;
+  el.addEventListener('click',e=>{e.stopPropagation();selectPt(p.id);});
+  document.getElementById('pin-overlay').appendChild(el);
+}
+
+window.selectPt=function(id){
+  const p=POINTS.find(pt=>pt.id===id); if(!p)return;
+  const cat=MAP_CATS.find(c=>c.id===p.cat);
+  document.querySelectorAll('.pt-item').forEach(e=>e.classList.remove('sel'));
+  document.getElementById('pi-'+id)?.classList.add('sel');
+  document.getElementById('pd-icon').textContent=cat?.emoji||'📍';
+  document.getElementById('pd-icon').style.background=cat?cat.color+'33':'';
+  document.getElementById('pd-title').textContent=p.name;
+  document.getElementById('pd-cat').textContent=cat?.name||p.cat;
+  const body=document.getElementById('pd-body'); body.innerHTML='';
+  // Multiple images — show all with prev/next if more than one
+  const imgs = p.imgs && p.imgs.length ? p.imgs : (p.img ? [p.img] : []);
+  if(imgs.length === 1){
+    const img=document.createElement('img');img.src=imgs[0];img.className='pd-img';img.onerror=()=>img.style.display='none';body.appendChild(img);
+  } else if(imgs.length > 1){
+    const wrap=document.createElement('div');wrap.style='position:relative;margin-bottom:9px';
+    const imgEl=document.createElement('img');imgEl.src=imgs[0];imgEl.className='pd-img';imgEl.style='margin-bottom:0';imgEl.onerror=()=>imgEl.style.display='none';
+    let imgIdx=0;
+    const counter=document.createElement('div');
+    counter.style='font-size:11px;color:var(--txt2);text-align:center;padding:4px 0';
+    counter.textContent=`1 / ${imgs.length}`;
+    const nav=document.createElement('div');nav.style='display:flex;gap:6px;justify-content:center;margin-bottom:8px';
+    const prev=document.createElement('button');prev.textContent='‹';prev.style='background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);border-radius:4px;padding:2px 10px;cursor:pointer;font-size:16px';
+    const next=document.createElement('button');next.textContent='›';next.style='background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);border-radius:4px;padding:2px 10px;cursor:pointer;font-size:16px';
+    prev.onclick=()=>{imgIdx=(imgIdx-1+imgs.length)%imgs.length;imgEl.src=imgs[imgIdx];counter.textContent=`${imgIdx+1} / ${imgs.length}`;};
+    next.onclick=()=>{imgIdx=(imgIdx+1)%imgs.length;imgEl.src=imgs[imgIdx];counter.textContent=`${imgIdx+1} / ${imgs.length}`;};
+    nav.appendChild(prev);nav.appendChild(counter);nav.appendChild(next);
+    wrap.appendChild(imgEl);body.appendChild(wrap);body.appendChild(nav);
+  }
+  if(p.desc){const d=document.createElement('p');d.textContent=p.desc;body.appendChild(d);}
+  const lc=CRAFTS.filter(c=>c.pins&&c.pins.includes(id));
+  const lv=VENDORS.filter(v=>v.pins&&v.pins.includes(id));
+  if(lc.length){const h=document.createElement('p');h.style='font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt2);margin:10px 0 4px';h.textContent='Crafting';body.appendChild(h);lc.forEach(c=>{const s=document.createElement('span');s.className='linked-pill';s.textContent=c.icon+' '+c.name;s.onclick=()=>goToCraft(c.id);body.appendChild(s);});}
+  if(lv.length){const h=document.createElement('p');h.style='font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt2);margin:10px 0 4px';h.textContent='Vendors';body.appendChild(h);lv.forEach(v=>{const s=document.createElement('span');s.className='linked-pill';s.textContent=v.icon+' '+v.name;s.onclick=()=>goToVendor(v.id);body.appendChild(s);});}
+  const acts=document.getElementById('pd-actions'); acts.innerHTML='';
+  const editBtn=document.createElement('button');
+  editBtn.style='background:none;border:1px solid var(--bdr2);color:var(--txt);font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer';
+  editBtn.textContent='✏️ Edit';
+  editBtn.onclick=()=>{closePtDetail();openPtMod(null,null,id);};
+  acts.appendChild(editBtn);
+  const delBtn=document.createElement('button');delBtn.className='pd-del';delBtn.textContent='🗑 Delete';delBtn.onclick=()=>delPt(id);acts.appendChild(delBtn);
+  document.getElementById('pt-detail').classList.add('on');
+};
+window.closePtDetail=()=>{document.getElementById('pt-detail').classList.remove('on');document.querySelectorAll('.pt-item').forEach(e=>e.classList.remove('sel'));};
+async function delPt(id){
+  if(!confirm('Delete this pin?'))return;
+  await dbDel('points',id);
+  for(const c of CRAFTS.filter(x=>x.pins?.includes(id))) await dbSet('crafts',c.id,{...c,pins:c.pins.filter(x=>x!==id)});
+  for(const v of VENDORS.filter(x=>x.pins?.includes(id))) await dbSet('vendors',v.id,{...v,pins:v.pins.filter(x=>x!==id)});
+  closePtDetail();
+}
+
+// ── CAT MODAL ──
+function buildClrRow(){
+  document.getElementById('clr-row').innerHTML=PC.map(c=>`<div class="clr-sw${c===eSelC?' on':''}" style="background:${c}" onclick="pickC('${c}',this)"></div>`).join('')
+    +`<input type="color" value="${eSelC}" style="width:25px;height:25px;border-radius:50%;border:none;padding:0;cursor:pointer" oninput="pickCcustom(this.value)">`;
+}
+function buildEmGrid(){
+  document.getElementById('em-grid').innerHTML=PE.map(e=>`<span class="em-opt${e===eSelE?' on':''}" onclick="pickE('${e}',this)">${e}</span>`).join('');
+}
+window.pickC=(c,el)=>{eSelC=c;document.querySelectorAll('#clr-row .clr-sw').forEach(s=>s.classList.remove('on'));el?.classList.add('on');};
+window.pickCcustom=c=>{eSelC=c;document.querySelectorAll('#clr-row .clr-sw').forEach(s=>s.classList.remove('on'));};
+window.pickE=(e,el)=>{eSelE=e;document.getElementById('cat-em-custom').value='';document.querySelectorAll('#em-grid .em-opt').forEach(o=>o.classList.remove('on'));el?.classList.add('on');};
+window.openCatMod=function(type,id){
+  ecatType=type||'map'; ecatId=id||null;
+  document.getElementById('cat-mod-title').textContent=id?'Edit Category':'New Category';
+  document.getElementById('cat-del-btn').style.display=id?'block':'none';
+  const arr=type==='craft'?CRAFT_CATS:type==='vendor'?VENDOR_CATS:MAP_CATS;
+  if(id){const c=arr.find(x=>x.id===id);document.getElementById('cat-name').value=c.name;eSelC=c.color;eSelE=c.emoji;}
+  else{document.getElementById('cat-name').value='';eSelC=PC[Math.floor(Math.random()*PC.length)];eSelE=PE[Math.floor(Math.random()*PE.length)];}
+  buildClrRow();buildEmGrid();document.getElementById('cat-em-custom').value='';
+  document.getElementById('cat-mod').classList.add('on');
+};
+window.closeCatMod=()=>document.getElementById('cat-mod').classList.remove('on');
+window.saveCat=async function(){
+  const name=document.getElementById('cat-name').value.trim();if(!name){alert('Enter a name');return;}
+  const emoji=document.getElementById('cat-em-custom').value.trim()||eSelE;
+  const id=ecatId||uid();
+  const col=ecatType==='craft'?'craft_cats':ecatType==='vendor'?'vendor_cats':'map_cats';
+  await dbSet(col,id,{id,name,color:eSelC,emoji}); closeCatMod();
+};
+window.delCat=async function(){
+  if(!ecatId)return;
+  const col=ecatType==='craft'?'craft_cats':ecatType==='vendor'?'vendor_cats':'map_cats';
+  const items=ecatType==='craft'?CRAFTS:ecatType==='vendor'?VENDORS:POINTS;
+  const n=items.filter(x=>x.cat===ecatId).length;
+  if(n&&!confirm(`${n} item(s) use this category. Delete anyway?`))return;
+  await dbDel(col,ecatId); closeCatMod();
+};
+
+// ── POINT MODAL ──
+let editingPtId = null;
+window.openPtMod=function(px,py,editId){
+  editingPtId = editId||null;
+  const isEdit = !!editId;
+  const p = isEdit ? POINTS.find(x=>x.id===editId) : null;
+  document.getElementById('pt-mod-title').textContent = isEdit ? 'Edit Pin' : 'New Map Point';
+  document.getElementById('pt-mod-hint').style.display = isEdit ? 'none' : 'block';
+  document.getElementById('pt-cat').innerHTML=MAP_CATS.map(c=>`<option value="${c.id}"${p&&p.cat===c.id?' selected':''}>${c.emoji} ${c.name}</option>`).join('');
+  document.getElementById('pt-name').value = p ? p.name : '';
+  document.getElementById('pt-x').value = p ? p.x : (px||'');
+  document.getElementById('pt-y').value = p ? p.y : (py||'');
+  document.getElementById('pt-desc').value = p ? (p.desc||'') : '';
+  // images: support old single img field and new imgs array
+  const imgs = p ? (p.imgs ? p.imgs.join('\n') : (p.img||'')) : '';
+  document.getElementById('pt-imgs').value = imgs;
+  document.getElementById('pt-mod').classList.add('on');
+};
+window.closePtMod=()=>document.getElementById('pt-mod').classList.remove('on');
+window.savePt=async function(){
+  const name=document.getElementById('pt-name').value.trim();if(!name){alert('Enter a name');return;}
+  const imgs = document.getElementById('pt-imgs').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const id = editingPtId || uid();
+  await dbSet('points',id,{id,name,cat:document.getElementById('pt-cat').value,x:parseFloat(document.getElementById('pt-x').value)||50,y:parseFloat(document.getElementById('pt-y').value)||50,desc:document.getElementById('pt-desc').value.trim(),imgs,img:imgs[0]||''});
+  editingPtId=null;
+  closePtMod();
+};
+
+// ── CRAFT ──
+function buildCrPills(){
+  document.getElementById('cr-pills').innerHTML=`<span class="pill${crFilter==='all'?' on':''}" onclick="setCrFilter('all')">All</span>`
+    +CRAFT_CATS.map(c=>`<span class="pill${crFilter===c.id?' on':''}"><span onclick="setCrFilter('${c.id}')">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('craft','${c.id}')">✏️</span></span>`).join('');
+}
+window.setCrFilter=f=>{crFilter=f;buildCrPills();renderCraftList();};
+function renderCraftList(){
+  const q=(document.getElementById('cr-search')?.value||'').toLowerCase();
+  const items=CRAFTS.filter(c=>(crFilter==='all'||c.cat===crFilter)&&c.name.toLowerCase().includes(q));
+  document.getElementById('cr-list').innerHTML=items.map(c=>{const cat=CRAFT_CATS.find(x=>x.id===c.cat);return`<div class="list-item${selCraft===c.id?' sel':''}" onclick="selectCraft('${c.id}')"><div class="li-icon" style="background:${cat?.color||'#444'}22">${c.icon}</div><div><div class="li-name">${c.name}</div><div class="li-sub">${cat?.name||''}</div></div><div class="li-badge">Lv${c.level||'?'}</div></div>`;}).join('');
+}
+window.selectCraft=function(id){
+  selCraft=id;renderCraftList();
+  const c=CRAFTS.find(x=>x.id===id);if(!c)return;
+  const cat=CRAFT_CATS.find(x=>x.id===c.cat);
+  const lp=POINTS.filter(p=>c.pins&&c.pins.includes(p.id));
+  document.getElementById('cr-detail').innerHTML=`
+    <div class="det-head">
+      <div class="det-icon" style="background:${cat?.color||'#444'}22">${c.icon}</div>
+      <div><div class="det-title">${c.name}</div><div class="det-sub">${cat?.name||''} ${c.level?'· Lv'+c.level:''} ${c.time?'· '+c.time:''}</div></div>
+      <div class="det-actions"><button class="det-del" onclick="delCraft('${c.id}')">🗑 Delete</button></div>
+    </div>
+    ${lp.length?`
+      <div class="pin-links" style="margin-bottom:18px">
+        <div class="sec-title">Locations on Map</div>
+        ${lp.map(p=>{const pc=MAP_CATS.find(x=>x.id===p.cat);return`<span class="pin-link-item" onclick="goToPin('${p.id}')">${pc?.emoji||'📍'} ${p.name}</span>`;}).join('')}
+        <div style="margin-top:10px">
+          <button onclick="highlightCraftPins('${c.id}')" style="background:var(--acc);border:none;color:#000;font-size:12px;font-weight:700;padding:7px 14px;border-radius:6px;cursor:pointer">🗺 Show All on Map</button>
+        </div>
+      </div>`:''}
+    ${c.ingredients?.length?`<div class="sec-title">Item Cost</div><div class="ing-list">${c.ingredients.map(i=>`<div class="ing"><div class="ing-name">${i.name}</div><div class="ing-qty">${i.qty}×</div></div>`).join('')}</div>`:''}`;
+};
+window.delCraft=async function(id){if(!confirm('Delete this recipe?'))return;await dbDel('crafts',id);if(selCraft===id){selCraft=null;document.getElementById('cr-detail').innerHTML='<div class="list-empty"><div class="list-empty-icon">⚒</div><p>Select a recipe</p></div>';}};
+window.goToCraft=function(id){selCraft=id;window.showTab('craft',document.getElementById('nav-craft'));renderCraftList();selectCraft(id);};
+window.openCraftMod=function(){
+  document.getElementById('cr-cat-sel').innerHTML=CRAFT_CATS.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+  ['cr-name','cr-icon','cr-lvl','cr-time','cr-ing'].forEach(i=>document.getElementById(i).value='');
+  buildCrPinOpts([]);
+  document.getElementById('cr-mod').classList.add('on');
+};
+
+function buildCrPinOpts(selectedIds){
+  document.getElementById('cr-pin-opts').innerHTML=POINTS.map(p=>{
+    const cat=MAP_CATS.find(c=>c.id===p.cat);
+    const checked=selectedIds.includes(p.id)?'checked':'';
+    return`<label class="link-opt"><input type="checkbox" value="${p.id}" ${checked}> ${cat?.emoji||'📍'} <b>${p.name}</b> <span style="color:var(--txt2);font-size:11px;margin-left:4px">${cat?.name||''} · ${p.x.toFixed(1)}%, ${p.y.toFixed(1)}%</span></label>`;
+  }).join('');
+}
+window.closeCraftMod=()=>document.getElementById('cr-mod').classList.remove('on');
+window.saveCraft=async function(){
+  const name=document.getElementById('cr-name').value.trim();if(!name){alert('Enter a name');return;}
+  const ingLines=document.getElementById('cr-ing').value.trim().split('\n').filter(Boolean);
+  const pins=[...document.querySelectorAll('#cr-pin-opts input:checked')].map(x=>x.value);
+  const id=uid();
+  await dbSet('crafts',id,{id,name,icon:document.getElementById('cr-icon').value.trim()||'⚒',cat:document.getElementById('cr-cat-sel').value,level:parseInt(document.getElementById('cr-lvl').value)||1,time:document.getElementById('cr-time').value.trim()||'?',ingredients:ingLines.map(l=>{const m=l.match(/(\d+)\s*[×x]\s*(.+)/i);return m?{qty:parseInt(m[1]),name:m[2].trim()}:{qty:1,name:l.trim()};}),pins});
+  closeCraftMod();
+};
+
+// ── VENDOR ──
+function buildVnPills(){
+  document.getElementById('vn-pills').innerHTML=`<span class="pill${vnFilter==='all'?' on':''}" onclick="setVnFilter('all')">All</span>`
+    +VENDOR_CATS.map(c=>`<span class="pill${vnFilter===c.id?' on':''}"><span onclick="setVnFilter('${c.id}')">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('vendor','${c.id}')">✏️</span></span>`).join('');
+}
+window.setVnFilter=f=>{vnFilter=f;buildVnPills();renderVendorList();};
+function renderVendorList(){
+  const q=(document.getElementById('vn-search')?.value||'').toLowerCase();
+  const items=VENDORS.filter(v=>(vnFilter==='all'||v.cat===vnFilter)&&v.name.toLowerCase().includes(q));
+  document.getElementById('vn-list').innerHTML=items.map(v=>{const cat=VENDOR_CATS.find(x=>x.id===v.cat);return`<div class="list-item${selVendor===v.id?' sel':''}" onclick="selectVendor('${v.id}')"><div class="li-icon" style="background:${cat?.color||'#444'}22">${v.icon}</div><div><div class="li-name">${v.name}</div><div class="li-sub">${cat?.name||''}</div></div><div class="li-badge">${v.trades?.length||0} trades</div></div>`;}).join('');
+}
+window.selectVendor=function(id){
+  selVendor=id;renderVendorList();
+  const v=VENDORS.find(x=>x.id===id);if(!v)return;
+  const cat=VENDOR_CATS.find(x=>x.id===v.cat);
+  const lp=POINTS.filter(p=>v.pins&&v.pins.includes(p.id));
+  document.getElementById('vn-detail').innerHTML=`
+    <div class="det-head">
+      <div class="det-icon" style="background:${cat?.color||'#444'}22">${v.icon}</div>
+      <div><div class="det-title">${v.name}</div><div class="det-sub">${cat?.name||''}</div></div>
+      <div class="det-actions"><button class="det-del" onclick="delVendor('${v.id}')">🗑 Delete</button></div>
+    </div>
+    ${v.desc?`<p style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:18px">${v.desc}</p>`:''}
+    <div class="stat-row"><div class="stat-box"><div class="stat-lbl">Trades</div><div class="stat-val">${v.trades?.length||0}</div></div></div>
+    ${lp.length?`<div class="pin-links"><div class="sec-title">Map Locations</div>${lp.map(p=>{const pc=MAP_CATS.find(x=>x.id===p.cat);return`<span class="pin-link-item" onclick="goToPin('${p.id}')">${pc?.emoji||'📍'} ${p.name}</span>`;}).join('')}</div>`:''}
+    ${v.trades?.length?`<div class="sec-title">Trades</div><div class="trade-list">${v.trades.map(t=>`<div class="trade"><div class="trade-give">${t.give}</div><div class="trade-arrow">→</div><div class="trade-get">${t.get}</div></div>`).join('')}</div>`:''}`;
+};
+window.delVendor=async function(id){if(!confirm('Delete this vendor?'))return;await dbDel('vendors',id);if(selVendor===id){selVendor=null;document.getElementById('vn-detail').innerHTML='<div class="list-empty"><div class="list-empty-icon">🏪</div><p>Select a vendor</p></div>';}};
+window.goToVendor=function(id){selVendor=id;window.showTab('vendor',document.getElementById('nav-vendor'));renderVendorList();selectVendor(id);};
+window.openVendorMod=function(){
+  document.getElementById('vn-cat-sel').innerHTML=VENDOR_CATS.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+  ['vn-name','vn-icon','vn-desc','vn-trades'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('vn-pin-opts').innerHTML=POINTS.map(p=>{const cat=MAP_CATS.find(c=>c.id===p.cat);return`<label class="link-opt"><input type="checkbox" value="${p.id}"> ${cat?.emoji||'📍'} ${p.name}</label>`;}).join('');
+  document.getElementById('vn-mod').classList.add('on');
+};
+window.closeVendorMod=()=>document.getElementById('vn-mod').classList.remove('on');
+window.saveVendor=async function(){
+  const name=document.getElementById('vn-name').value.trim();if(!name){alert('Enter a name');return;}
+  const tradeLines=document.getElementById('vn-trades').value.trim().split('\n').filter(Boolean);
+  const pins=[...document.querySelectorAll('#vn-pin-opts input:checked')].map(x=>x.value);
+  const trades=tradeLines.map(l=>{const m=l.split(/→|->/).map(s=>s.trim());return{give:m[0]||l,get:m[1]||'?'};});
+  const id=uid();
+  await dbSet('vendors',id,{id,name,icon:document.getElementById('vn-icon').value.trim()||'🏪',cat:document.getElementById('vn-cat-sel').value,desc:document.getElementById('vn-desc').value.trim(),trades,pins});
+  closeVendorMod();
+};
+
+// ── GO TO PIN ──
+// ── HIGHLIGHT CRAFT PINS ON MAP ──
+window.highlightCraftPins=function(craftId){
+  const craft=CRAFTS.find(x=>x.id===craftId); if(!craft||!craft.pins||!craft.pins.length) return;
+  // Switch to map tab
+  showTab('map',document.getElementById('nav-map'));
+  setTimeout(()=>{
+    // Clear previous highlights
+    document.querySelectorAll('.pin.craft-linked').forEach(el=>el.classList.remove('craft-linked'));
+    // If only one pin, zoom to it; if multiple, fit them all
+    const linkedPins=POINTS.filter(p=>craft.pins.includes(p.id));
+    linkedPins.forEach(p=>{
+      const el=document.getElementById('pin-'+p.id);
+      if(el) el.classList.add('craft-linked');
+    });
+    if(linkedPins.length===1){
+      goToPin(linkedPins[0].id);
+    } else if(linkedPins.length>1){
+      // Fit all pins in view
+      const w=document.getElementById('map-wrap');
+      const W=w.clientWidth,H=w.clientHeight;
+      const xs=linkedPins.map(p=>p.x/100*imgW());
+      const ys=linkedPins.map(p=>p.y/100*imgH());
+      const minX=Math.min(...xs),maxX=Math.max(...xs);
+      const minY=Math.min(...ys),maxY=Math.max(...ys);
+      const padX=Math.max(200,W*.2), padY=Math.max(200,H*.2);
+      const rangeX=maxX-minX+padX*2, rangeY=maxY-minY+padY*2;
+      sx=Math.min(12,Math.max(.05,Math.min(W/rangeX,H/rangeY)));
+      const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+      ox=W/2-cx*sx; oy=H/2-cy*sx;
+      applyT();
+    }
+    // Auto-clear highlight after 4s
+    setTimeout(()=>document.querySelectorAll('.pin.craft-linked').forEach(el=>el.classList.remove('craft-linked')),4000);
+  },80);
+};
+
+// ── PIN PICK MODE (click pins on map to select them for a craft) ──
+let pickModeActive=false;
+let pickModeSelected=[];
+
+window.enterPinPickMode=function(){
+  // Close craft modal, switch to map
+  document.getElementById('cr-mod').classList.remove('on');
+  showTab('map',document.getElementById('nav-map'));
+  pickModeActive=true;
+  // Get currently checked pins
+  pickModeSelected=[...document.querySelectorAll('#cr-pin-opts input:checked')].map(x=>x.value);
+  // Show banner
+  const banner=document.createElement('div');
+  banner.className='pin-pick-banner'; banner.id='pick-banner';
+  banner.innerHTML=`<span>Click pins to select/deselect — <span id="pick-count">${pickModeSelected.length}</span> selected</span><button onclick="exitPinPickMode()">✓ Done</button>`;
+  document.getElementById('map-wrap').appendChild(banner);
+  // Highlight already-selected pins
+  pickModeSelected.forEach(pid=>{
+    const el=document.getElementById('pin-'+pid);
+    if(el) el.classList.add('pick-selected');
+  });
+  // Override pin click behavior
+  window._pickModeOrigClick={};
+  document.querySelectorAll('.pin').forEach(el=>{
+    el.classList.add('pick-mode');
+    const newHandler=function(e){
+      e.stopPropagation();
+      const pid=el.dataset.id;
+      if(pickModeSelected.includes(pid)){
+        pickModeSelected=pickModeSelected.filter(x=>x!==pid);
+        el.classList.remove('pick-selected');
+      } else {
+        pickModeSelected.push(pid);
+        el.classList.add('pick-selected');
+      }
+      document.getElementById('pick-count').textContent=pickModeSelected.length;
+    };
+    el._pickHandler=newHandler;
+    el.addEventListener('click',newHandler,true);
+  });
+};
+
+window.exitPinPickMode=function(){
+  pickModeActive=false;
+  document.getElementById('pick-banner')?.remove();
+  document.querySelectorAll('.pin').forEach(el=>{
+    el.classList.remove('pick-mode','pick-selected');
+    if(el._pickHandler){ el.removeEventListener('click',el._pickHandler,true); delete el._pickHandler; }
+  });
+  // Re-open craft modal with selections applied
+  document.getElementById('cr-mod').classList.add('on');
+  showTab('craft',document.getElementById('nav-craft'));
+  // Update checkboxes to match picked pins
+  document.querySelectorAll('#cr-pin-opts input[type=checkbox]').forEach(cb=>{
+    cb.checked=pickModeSelected.includes(cb.value);
+  });
+};
+
+window.goToPin=function(id){
+  window.showTab('map',document.getElementById('nav-map'));
+  setTimeout(()=>{
+    const p=POINTS.find(x=>x.id===id);if(!p)return;
+    const w=document.getElementById('map-wrap');
+    sx=2; ox=w.clientWidth/2-p.x/100*imgW()*sx; oy=w.clientHeight/2-p.y/100*imgH()*sx;
+    applyT(); setTimeout(()=>window.selectPt(id),80);
+  },50);
+};
+
+window.goToVendor=window.goToVendor;
+window.goToCraft=window.goToCraft;
+</script>
+</body>
+</html>
