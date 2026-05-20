@@ -205,6 +205,16 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 .link-opt:hover{background:var(--surf2);}
 .link-opt input[type=checkbox]{accent-color:var(--acc);}
 .pd-img{background:var(--surf2);}
+/* Pin pick mode */
+.pin-pick-overlay{position:absolute;inset:0;z-index:50;cursor:crosshair;}
+.pin-pick-banner{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--acc);color:#000;font-size:12px;font-weight:700;padding:7px 16px;border-radius:7px;z-index:60;white-space:nowrap;display:flex;align-items:center;gap:10px;}
+.pin-pick-banner button{background:rgba(0,0,0,.2);border:none;color:#000;font-size:11px;font-weight:700;padding:3px 9px;border-radius:4px;cursor:pointer;}
+.pin.pick-highlight .pin-marker{box-shadow:0 0 0 4px var(--acc),0 2px 10px rgba(0,0,0,.55);transform:rotate(-45deg) scale(1.3);}
+.pin.pick-selected .pin-marker{box-shadow:0 0 0 4px var(--grn),0 2px 10px rgba(0,0,0,.55);}
+/* Highlight pins linked to selected craft */
+.pin.craft-linked .pin-marker{box-shadow:0 0 0 4px var(--acc),0 2px 10px rgba(0,0,0,.55);}
+.pin.craft-linked{animation:bob .6s ease-in-out infinite alternate;}
+@keyframes bob{from{transform:translateY(0)}to{transform:translateY(-6px)}}
 </style>
 </head>
 <body>
@@ -347,11 +357,12 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
       <div><label class="lbl">Level Required</label><input class="inp" type="number" id="cr-lvl" placeholder="1" min="1"></div>
       <div><label class="lbl">Craft Time</label><input class="inp" id="cr-time" placeholder="30 min"></div>
     </div>
-    <div><label class="lbl">Yield</label><input class="inp" type="number" id="cr-yield" placeholder="1" min="1"></div>
-    <div><label class="lbl">Description</label><textarea class="ta" id="cr-desc" placeholder="Description…"></textarea></div>
-    <div><label class="lbl">Ingredients (one per line: "Qty × Name")</label><textarea class="ta" id="cr-ing" placeholder="2 × Iron Ore&#10;1 × Coal" style="min-height:85px"></textarea></div>
-    <div><label class="lbl">Steps (one per line)</label><textarea class="ta" id="cr-steps" placeholder="Step 1&#10;Step 2" style="min-height:70px"></textarea></div>
-    <div><label class="lbl">Linked Map Pins</label><div class="link-opts" id="cr-pin-opts"></div></div>
+    <div><label class="lbl">Item Cost (one per line: "Qty × Item")</label><textarea class="ta" id="cr-ing" placeholder="2 × Iron Ore&#10;1 × Coal" style="min-height:90px"></textarea></div>
+    <div>
+      <label class="lbl">Linked Map Pins</label>
+      <div class="hint-box" style="margin-bottom:7px">Click pins directly on the map, or check them below. <button onclick="enterPinPickMode()" style="background:var(--acc);border:none;color:#000;font-size:11px;font-weight:700;padding:3px 9px;border-radius:4px;cursor:pointer;margin-left:6px">🗺 Pick on Map</button></div>
+      <div class="link-opts" id="cr-pin-opts"></div>
+    </div>
   </div>
   <div class="mod-foot"><button class="btn-c" onclick="closeCraftMod()">Cancel</button><button class="btn-s" onclick="saveCraft()">Save</button></div>
 </div></div>
@@ -639,6 +650,7 @@ function addPin(p){
   const s=p2s(p.x,p.y);
   const el=document.createElement('div');
   el.className='pin'+(catTog[p.cat]===false?' hide':'');
+  el.id='pin-'+p.id;
   el.dataset.px=p.x; el.dataset.py=p.y; el.dataset.id=p.id; el.dataset.cat=p.cat;
   el.style.left=s.x+'px'; el.style.top=s.y+'px';
   el.innerHTML=`<div class="pin-marker" style="background:${cat.color}"><span class="pin-emoji">${cat.emoji}</span></div>`;
@@ -783,35 +795,42 @@ window.selectCraft=function(id){
   document.getElementById('cr-detail').innerHTML=`
     <div class="det-head">
       <div class="det-icon" style="background:${cat?.color||'#444'}22">${c.icon}</div>
-      <div><div class="det-title">${c.name}</div><div class="det-sub">${cat?.name||''} ${c.level?'· Lv'+c.level:''}</div></div>
+      <div><div class="det-title">${c.name}</div><div class="det-sub">${cat?.name||''} ${c.level?'· Lv'+c.level:''} ${c.time?'· '+c.time:''}</div></div>
       <div class="det-actions"><button class="det-del" onclick="delCraft('${c.id}')">🗑 Delete</button></div>
     </div>
-    ${c.desc?`<p style="font-size:13px;color:var(--txt2);line-height:1.7;margin-bottom:18px">${c.desc}</p>`:''}
-    <div class="stat-row">
-      <div class="stat-box"><div class="stat-lbl">Yield</div><div class="stat-val">${c.yield||1}×</div></div>
-      <div class="stat-box"><div class="stat-lbl">Time</div><div class="stat-val">${c.time||'?'}</div></div>
-      <div class="stat-box"><div class="stat-lbl">Ingredients</div><div class="stat-val">${c.ingredients?.length||0}</div></div>
-    </div>
-    ${lp.length?`<div class="pin-links"><div class="sec-title">Map Locations</div>${lp.map(p=>{const pc=MAP_CATS.find(x=>x.id===p.cat);return`<span class="pin-link-item" onclick="goToPin('${p.id}')">${pc?.emoji||'📍'} ${p.name}</span>`;}).join('')}</div>`:''}
-    ${c.ingredients?.length?`<div class="sec-title">Ingredients</div><div class="ing-list">${c.ingredients.map(i=>`<div class="ing"><div class="ing-ico">${i.icon||'📦'}</div><div class="ing-name">${i.name}</div><div class="ing-qty">${i.qty}×</div></div>`).join('')}</div>`:''}
-    ${c.steps?.length?`<div class="sec-title">Steps</div><div class="steps">${c.steps.map((s,i)=>`<div class="step"><div class="step-n">${i+1}</div><div class="step-t">${s}</div></div>`).join('')}</div>`:''}`;
+    ${lp.length?`
+      <div class="pin-links" style="margin-bottom:18px">
+        <div class="sec-title">Locations on Map</div>
+        ${lp.map(p=>{const pc=MAP_CATS.find(x=>x.id===p.cat);return`<span class="pin-link-item" onclick="goToPin('${p.id}')">${pc?.emoji||'📍'} ${p.name}</span>`;}).join('')}
+        <div style="margin-top:10px">
+          <button onclick="highlightCraftPins('${c.id}')" style="background:var(--acc);border:none;color:#000;font-size:12px;font-weight:700;padding:7px 14px;border-radius:6px;cursor:pointer">🗺 Show All on Map</button>
+        </div>
+      </div>`:''}
+    ${c.ingredients?.length?`<div class="sec-title">Item Cost</div><div class="ing-list">${c.ingredients.map(i=>`<div class="ing"><div class="ing-name">${i.name}</div><div class="ing-qty">${i.qty}×</div></div>`).join('')}</div>`:''}`;
 };
 window.delCraft=async function(id){if(!confirm('Delete this recipe?'))return;await dbDel('crafts',id);if(selCraft===id){selCraft=null;document.getElementById('cr-detail').innerHTML='<div class="list-empty"><div class="list-empty-icon">⚒</div><p>Select a recipe</p></div>';}};
 window.goToCraft=function(id){selCraft=id;window.showTab('craft',document.getElementById('nav-craft'));renderCraftList();selectCraft(id);};
 window.openCraftMod=function(){
   document.getElementById('cr-cat-sel').innerHTML=CRAFT_CATS.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
-  ['cr-name','cr-icon','cr-lvl','cr-time','cr-yield','cr-desc','cr-ing','cr-steps'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('cr-pin-opts').innerHTML=POINTS.map(p=>{const cat=MAP_CATS.find(c=>c.id===p.cat);return`<label class="link-opt"><input type="checkbox" value="${p.id}"> ${cat?.emoji||'📍'} ${p.name}</label>`;}).join('');
+  ['cr-name','cr-icon','cr-lvl','cr-time','cr-ing'].forEach(i=>document.getElementById(i).value='');
+  buildCrPinOpts([]);
   document.getElementById('cr-mod').classList.add('on');
 };
+
+function buildCrPinOpts(selectedIds){
+  document.getElementById('cr-pin-opts').innerHTML=POINTS.map(p=>{
+    const cat=MAP_CATS.find(c=>c.id===p.cat);
+    const checked=selectedIds.includes(p.id)?'checked':'';
+    return`<label class="link-opt"><input type="checkbox" value="${p.id}" ${checked}> ${cat?.emoji||'📍'} <b>${p.name}</b> <span style="color:var(--txt2);font-size:11px;margin-left:4px">${cat?.name||''} · ${p.x.toFixed(1)}%, ${p.y.toFixed(1)}%</span></label>`;
+  }).join('');
+}
 window.closeCraftMod=()=>document.getElementById('cr-mod').classList.remove('on');
 window.saveCraft=async function(){
   const name=document.getElementById('cr-name').value.trim();if(!name){alert('Enter a name');return;}
   const ingLines=document.getElementById('cr-ing').value.trim().split('\n').filter(Boolean);
-  const stepLines=document.getElementById('cr-steps').value.trim().split('\n').filter(Boolean);
   const pins=[...document.querySelectorAll('#cr-pin-opts input:checked')].map(x=>x.value);
   const id=uid();
-  await dbSet('crafts',id,{id,name,icon:document.getElementById('cr-icon').value.trim()||'⚒',cat:document.getElementById('cr-cat-sel').value,level:parseInt(document.getElementById('cr-lvl').value)||1,time:document.getElementById('cr-time').value.trim()||'?',yield:parseInt(document.getElementById('cr-yield').value)||1,desc:document.getElementById('cr-desc').value.trim(),ingredients:ingLines.map(l=>{const m=l.match(/(\d+)\s*[×x]\s*(.+)/i);return m?{qty:parseInt(m[1]),name:m[2].trim(),icon:'📦'}:{qty:1,name:l.trim(),icon:'📦'};}),steps:stepLines,pins});
+  await dbSet('crafts',id,{id,name,icon:document.getElementById('cr-icon').value.trim()||'⚒',cat:document.getElementById('cr-cat-sel').value,level:parseInt(document.getElementById('cr-lvl').value)||1,time:document.getElementById('cr-time').value.trim()||'?',ingredients:ingLines.map(l=>{const m=l.match(/(\d+)\s*[×x]\s*(.+)/i);return m?{qty:parseInt(m[1]),name:m[2].trim()}:{qty:1,name:l.trim()};}),pins});
   closeCraftMod();
 };
 
@@ -862,6 +881,100 @@ window.saveVendor=async function(){
 };
 
 // ── GO TO PIN ──
+// ── HIGHLIGHT CRAFT PINS ON MAP ──
+window.highlightCraftPins=function(craftId){
+  const craft=CRAFTS.find(x=>x.id===craftId); if(!craft||!craft.pins||!craft.pins.length) return;
+  // Switch to map tab
+  showTab('map',document.getElementById('nav-map'));
+  setTimeout(()=>{
+    // Clear previous highlights
+    document.querySelectorAll('.pin.craft-linked').forEach(el=>el.classList.remove('craft-linked'));
+    // If only one pin, zoom to it; if multiple, fit them all
+    const linkedPins=POINTS.filter(p=>craft.pins.includes(p.id));
+    linkedPins.forEach(p=>{
+      const el=document.getElementById('pin-'+p.id);
+      if(el) el.classList.add('craft-linked');
+    });
+    if(linkedPins.length===1){
+      goToPin(linkedPins[0].id);
+    } else if(linkedPins.length>1){
+      // Fit all pins in view
+      const w=document.getElementById('map-wrap');
+      const W=w.clientWidth,H=w.clientHeight;
+      const xs=linkedPins.map(p=>p.x/100*imgW());
+      const ys=linkedPins.map(p=>p.y/100*imgH());
+      const minX=Math.min(...xs),maxX=Math.max(...xs);
+      const minY=Math.min(...ys),maxY=Math.max(...ys);
+      const padX=Math.max(200,W*.2), padY=Math.max(200,H*.2);
+      const rangeX=maxX-minX+padX*2, rangeY=maxY-minY+padY*2;
+      sx=Math.min(12,Math.max(.05,Math.min(W/rangeX,H/rangeY)));
+      const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+      ox=W/2-cx*sx; oy=H/2-cy*sx;
+      applyT();
+    }
+    // Auto-clear highlight after 4s
+    setTimeout(()=>document.querySelectorAll('.pin.craft-linked').forEach(el=>el.classList.remove('craft-linked')),4000);
+  },80);
+};
+
+// ── PIN PICK MODE (click pins on map to select them for a craft) ──
+let pickModeActive=false;
+let pickModeSelected=[];
+
+window.enterPinPickMode=function(){
+  // Close craft modal, switch to map
+  document.getElementById('cr-mod').classList.remove('on');
+  showTab('map',document.getElementById('nav-map'));
+  pickModeActive=true;
+  // Get currently checked pins
+  pickModeSelected=[...document.querySelectorAll('#cr-pin-opts input:checked')].map(x=>x.value);
+  // Show banner
+  const banner=document.createElement('div');
+  banner.className='pin-pick-banner'; banner.id='pick-banner';
+  banner.innerHTML=`<span>Click pins to select/deselect — <span id="pick-count">${pickModeSelected.length}</span> selected</span><button onclick="exitPinPickMode()">✓ Done</button>`;
+  document.getElementById('map-wrap').appendChild(banner);
+  // Highlight already-selected pins
+  pickModeSelected.forEach(pid=>{
+    const el=document.getElementById('pin-'+pid);
+    if(el) el.classList.add('pick-selected');
+  });
+  // Override pin click behavior
+  window._pickModeOrigClick={};
+  document.querySelectorAll('.pin').forEach(el=>{
+    el.classList.add('pick-mode');
+    const newHandler=function(e){
+      e.stopPropagation();
+      const pid=el.dataset.id;
+      if(pickModeSelected.includes(pid)){
+        pickModeSelected=pickModeSelected.filter(x=>x!==pid);
+        el.classList.remove('pick-selected');
+      } else {
+        pickModeSelected.push(pid);
+        el.classList.add('pick-selected');
+      }
+      document.getElementById('pick-count').textContent=pickModeSelected.length;
+    };
+    el._pickHandler=newHandler;
+    el.addEventListener('click',newHandler,true);
+  });
+};
+
+window.exitPinPickMode=function(){
+  pickModeActive=false;
+  document.getElementById('pick-banner')?.remove();
+  document.querySelectorAll('.pin').forEach(el=>{
+    el.classList.remove('pick-mode','pick-selected');
+    if(el._pickHandler){ el.removeEventListener('click',el._pickHandler,true); delete el._pickHandler; }
+  });
+  // Re-open craft modal with selections applied
+  document.getElementById('cr-mod').classList.add('on');
+  showTab('craft',document.getElementById('nav-craft'));
+  // Update checkboxes to match picked pins
+  document.querySelectorAll('#cr-pin-opts input[type=checkbox]').forEach(cb=>{
+    cb.checked=pickModeSelected.includes(cb.value);
+  });
+};
+
 window.goToPin=function(id){
   window.showTab('map',document.getElementById('nav-map'));
   setTimeout(()=>{
