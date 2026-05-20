@@ -796,7 +796,10 @@ window.selectCraft=function(id){
     <div class="det-head">
       <div class="det-icon" style="background:${cat?.color||'#444'}22">${c.icon}</div>
       <div><div class="det-title">${c.name}</div><div class="det-sub">${cat?.name||''} ${c.level?'· Lv'+c.level:''} ${c.time?'· '+c.time:''}</div></div>
-      <div class="det-actions"><button class="det-del" onclick="delCraft('${c.id}')">🗑 Delete</button></div>
+      <div class="det-actions">
+        <button onclick="editCraft('${c.id}')" style="background:none;border:1px solid var(--bdr2);color:var(--txt);font-size:12px;padding:5px 11px;border-radius:5px;cursor:pointer;margin-right:4px">✏️ Edit</button>
+        <button class="det-del" onclick="delCraft('${c.id}')">🗑 Delete</button>
+      </div>
     </div>
     ${lp.length?`
       <div class="pin-links" style="margin-bottom:18px">
@@ -810,10 +813,28 @@ window.selectCraft=function(id){
 };
 window.delCraft=async function(id){if(!confirm('Delete this recipe?'))return;await dbDel('crafts',id);if(selCraft===id){selCraft=null;document.getElementById('cr-detail').innerHTML='<div class="list-empty"><div class="list-empty-icon">⚒</div><p>Select a recipe</p></div>';}};
 window.goToCraft=function(id){selCraft=id;window.showTab('craft',document.getElementById('nav-craft'));renderCraftList();selectCraft(id);};
+let editingCraftId=null;
+
 window.openCraftMod=function(){
+  editingCraftId=null;
   document.getElementById('cr-cat-sel').innerHTML=CRAFT_CATS.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
   ['cr-name','cr-icon','cr-lvl','cr-time','cr-ing'].forEach(i=>document.getElementById(i).value='');
   buildCrPinOpts([]);
+  document.querySelector('#cr-mod .mod-head h3').textContent='New Recipe';
+  document.getElementById('cr-mod').classList.add('on');
+};
+
+window.editCraft=function(id){
+  const craft=CRAFTS.find(x=>x.id===id); if(!craft)return;
+  editingCraftId=id;
+  document.getElementById('cr-cat-sel').innerHTML=CRAFT_CATS.map(c=>`<option value="${c.id}"${c.id===craft.cat?' selected':''}>${c.emoji} ${c.name}</option>`).join('');
+  document.getElementById('cr-name').value=craft.name||'';
+  document.getElementById('cr-icon').value=craft.icon||'';
+  document.getElementById('cr-lvl').value=craft.level||'';
+  document.getElementById('cr-time').value=craft.time||'';
+  document.getElementById('cr-ing').value=(craft.ingredients||[]).map(i=>`${i.qty} × ${i.name}`).join('\n');
+  buildCrPinOpts(craft.pins||[]);
+  document.querySelector('#cr-mod .mod-head h3').textContent='Edit Recipe';
   document.getElementById('cr-mod').classList.add('on');
 };
 
@@ -829,8 +850,9 @@ window.saveCraft=async function(){
   const name=document.getElementById('cr-name').value.trim();if(!name){alert('Enter a name');return;}
   const ingLines=document.getElementById('cr-ing').value.trim().split('\n').filter(Boolean);
   const pins=[...document.querySelectorAll('#cr-pin-opts input:checked')].map(x=>x.value);
-  const id=uid();
+  const id=editingCraftId||uid();
   await dbSet('crafts',id,{id,name,icon:document.getElementById('cr-icon').value.trim()||'⚒',cat:document.getElementById('cr-cat-sel').value,level:parseInt(document.getElementById('cr-lvl').value)||1,time:document.getElementById('cr-time').value.trim()||'?',ingredients:ingLines.map(l=>{const m=l.match(/(\d+)\s*[×x]\s*(.+)/i);return m?{qty:parseInt(m[1]),name:m[2].trim()}:{qty:1,name:l.trim()};}),pins});
+  editingCraftId=null;
   closeCraftMod();
 };
 
