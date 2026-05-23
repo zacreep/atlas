@@ -624,7 +624,7 @@ function buildMapSidebar(){
       <span class="cat-chev">▶</span>
     </div>
     <div class="pt-list" id="pl-${cat.id}">
-      ${pts.map(p=>`<div class="pt-item" id="pi-${p.id}" onclick="selectPt('${p.id}')">${cat.emoji} ${p.name}</div>`).join('')}
+      ${pts.map(p=>`<div class="pt-item" id="pi-${p.id}" onclick="zoomToPin('${p.id}')">${cat.emoji} ${p.name}</div>`).join('')}
     </div>`;
     el.appendChild(g);
   });
@@ -997,14 +997,20 @@ window.exitPinPickMode=function(){
   });
 };
 
+function panToPin(id,zoom){
+  const p=POINTS.find(x=>x.id===id); if(!p)return;
+  const w=document.getElementById('map-wrap');
+  sx=zoom||2;
+  ox=w.clientWidth/2-p.x/100*imgW()*sx;
+  oy=w.clientHeight/2-p.y/100*imgH()*sx;
+  applyT();
+}
 window.goToPin=function(id){
   window.showTab('map',document.getElementById('nav-map'));
-  setTimeout(()=>{
-    const p=POINTS.find(x=>x.id===id);if(!p)return;
-    const w=document.getElementById('map-wrap');
-    sx=2; ox=w.clientWidth/2-p.x/100*imgW()*sx; oy=w.clientHeight/2-p.y/100*imgH()*sx;
-    applyT(); setTimeout(()=>window.selectPt(id),80);
-  },50);
+  setTimeout(()=>{ panToPin(id,2); setTimeout(()=>window.selectPt(id),80); },50);
+};
+window.zoomToPin=function(id){
+  panToPin(id,2); setTimeout(()=>window.selectPt(id),60);
 };
 
 window.goToVendor=window.goToVendor;
