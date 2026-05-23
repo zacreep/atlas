@@ -999,10 +999,17 @@ window.exitPinPickMode=function(){
 
 function panToPin(id,zoom){
   const p=POINTS.find(x=>x.id===id); if(!p)return;
+  const iw=imgW(), ih=imgH();
+  if(!iw||!ih)return; // image not ready
+  const px=parseFloat(p.x), py=parseFloat(p.y);
+  if(isNaN(px)||isNaN(py))return;
   const w=document.getElementById('map-wrap');
-  sx=zoom||2;
-  ox=w.clientWidth/2-p.x/100*imgW()*sx;
-  oy=w.clientHeight/2-p.y/100*imgH()*sx;
+  const W=w.clientWidth, H=w.clientHeight;
+  // Target zoom — use provided or pick one that makes the area visible
+  sx=zoom||Math.min(12,Math.max(1.5, Math.min(W,H)/400));
+  // Center the pin in the viewport
+  ox=W/2-(px/100)*iw*sx;
+  oy=H/2-(py/100)*ih*sx;
   applyT();
 }
 window.goToPin=function(id){
