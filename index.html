@@ -91,6 +91,31 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
 .cat-group.open .pt-list{display:block;}
 .pt-item{display:flex;align-items:center;gap:6px;padding:5px 9px 5px 28px;cursor:pointer;border-radius:6px;font-size:12px;color:var(--txt2);transition:background .1s;}
 .pt-item:hover,.pt-item.sel{background:var(--surf2);color:var(--txt);}
+.subcat-group{margin:1px 0 1px 10px;}
+.subcat-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:pointer;user-select:none;border-radius:6px;margin:0 4px;transition:background .1s;}
+.subcat-hdr:hover{background:var(--surf2);}
+.subcat-hdr:hover .cat-edit{opacity:1;}
+.subcat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.subcat-lbl{flex:1;font-weight:500;font-size:12px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.subcat-cnt{font-size:10px;color:var(--txt2);flex-shrink:0;}
+.subcat-chev{font-size:9px;color:var(--txt2);transition:transform .2s;flex-shrink:0;}
+.subcat-group.open .subcat-chev{transform:rotate(90deg);}
+.subcat-pt-list{display:none;padding:2px 4px 4px;}
+.subcat-group.open .subcat-pt-list{display:block;}
+.subcat-pt-item{padding-left:36px !important;}
+.cat-drop-active>.cat-hdr,.cat-drop-active>.subcat-hdr{background:var(--acc)22 !important;outline:2px dashed var(--acc);}
+.subcat-group{margin:1px 0 1px 10px;}
+.subcat-hdr{display:flex;align-items:center;gap:6px;padding:5px 8px;cursor:pointer;user-select:none;border-radius:6px;margin:0 4px;transition:background .1s;font-size:12px;}
+.subcat-hdr:hover{background:var(--surf2);}
+.subcat-hdr:hover .cat-edit{opacity:1;}
+.subcat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.subcat-lbl{flex:1;font-weight:500;font-size:12px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.subcat-cnt{font-size:11px;color:var(--txt2);flex-shrink:0;}
+.subcat-chev{font-size:9px;color:var(--txt2);transition:transform .2s;flex-shrink:0;}
+.subcat-group.open .subcat-chev{transform:rotate(90deg);}
+.subcat-pt-list{display:none;padding:2px 4px 4px;}
+.subcat-group.open .subcat-pt-list{display:block;}
+.subcat-pt-item{padding-left:36px !important;}
 
 /* MAP */
 .map-wrap{flex:1;position:relative;overflow:hidden;cursor:grab;background:#0a1520;}
@@ -676,6 +701,17 @@ function buildMapSidebar(){
       const pid=ptEl.id.replace('pi-','');
       if(pid) applyDragToEl(ptEl,pid,'points');
     });
+    // Allow dropping points ONTO category/subcat headers to change category
+    applyDropTarget(document.querySelector('#cg-'+cat.id+' > .cat-hdr'), cat.id);
+    children.forEach(sub=>{
+      const sh=document.querySelector('#cg-'+sub.id+' .subcat-hdr');
+      if(sh) applyDropTarget(sh, sub.id);
+    });
+    // Allow dropping points ONTO a category header to move them into that category
+    applyDropTarget(document.querySelector(`#cg-${cat.id} > .cat-hdr`), cat.id);
+    children.forEach(sub=>{
+      applyDropTarget(document.querySelector(`#cg-${sub.id} .subcat-hdr`), sub.id);
+    });
   });
 
   // Orphaned sub-cats (parent deleted) — show at bottom
@@ -820,8 +856,16 @@ window.openCatMod=function(type,id,presetParentId){
   } else {
     parentRow.style.display='none';
   }
-  if(id){const existing=arr.find(x=>x.id===id);document.getElementById('cat-name').value=existing.name;eSelC=existing.color;eSelE=existing.emoji;}
-  else{document.getElementById('cat-name').value='';eSelC=PC[Math.floor(Math.random()*PC.length)];eSelE=PE[Math.floor(Math.random()*PE.length)];}
+  if(id){
+    const existing=arr.find(x=>x.id===id);
+    document.getElementById('cat-name').value=existing?.name||'';
+    eSelC=existing?.color||PC[0];
+    eSelE=existing?.emoji||PE[0];
+  } else {
+    document.getElementById('cat-name').value='';
+    // Keep last used color/emoji rather than re-rolling random
+    // (eSelC and eSelE retain their last value)
+  }
   buildClrRow();buildEmGrid();document.getElementById('cat-em-custom').value='';
   document.getElementById('cat-mod').classList.add('on');
 };
@@ -1228,6 +1272,33 @@ function rebuildAfterReorder(listName){
 
 // Sort an array by its .order field (items without order go last)
 function byOrder(arr){ return [...arr].sort((a,b)=>(a.order??9999)-(b.order??9999)); }
+
+// Apply a category header as a DROP TARGET so pins can be dragged into it
+function applyDropTarget(el, catId){
+  if(!el) return;
+  el.addEventListener('dragover', e=>{
+    if(dragListName!=='points') return; // only accept point drags
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    el.closest('.cat-group,.subcat-group')?.classList.add('cat-drop-active');
+  });
+  el.addEventListener('dragleave', e=>{
+    if(!el.contains(e.relatedTarget))
+      el.closest('.cat-group,.subcat-group')?.classList.remove('cat-drop-active');
+  });
+  el.addEventListener('drop', async e=>{
+    e.preventDefault();
+    e.stopPropagation();
+    el.closest('.cat-group,.subcat-group')?.classList.remove('cat-drop-active');
+    if(dragListName!=='points'||!dragSrcId) return;
+    const pt=POINTS.find(x=>x.id===dragSrcId);
+    if(!pt||pt.cat===catId) return; // already in this cat
+    pt.cat=catId;
+    await dbSet('points', pt.id, pt);
+    buildMapSidebar();
+    rebuildPins();
+  });
+}
 
 function panToPin(id,zoom){
   const p=POINTS.find(x=>x.id===id); if(!p)return;
