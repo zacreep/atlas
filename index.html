@@ -315,6 +315,7 @@ nav{display:flex;align-items:center;background:var(--surf);border-bottom:1px sol
   <div class="mod-head"><h3 id="cat-mod-title">Category</h3><button class="x-btn" onclick="closeCatMod()">×</button></div>
   <div class="mod-body">
     <div><label class="lbl">Name</label><input class="inp" id="cat-name" placeholder="Category name"></div>
+    <div id="cat-parent-row"><label class="lbl">Parent Category (optional)</label><select class="sel" id="cat-parent"><option value="">— None (top level) —</option></select></div>
     <div><label class="lbl">Emoji</label><div class="em-grid" id="em-grid"></div><input class="inp" id="cat-em-custom" placeholder="Or type any emoji" maxlength="4" style="margin-top:7px"></div>
     <div><label class="lbl">Color</label><div class="clr-row" id="clr-row"></div></div>
   </div>
@@ -611,7 +612,75 @@ function initMap(){
 // ── MAP SIDEBAR ──
 function buildMapSidebar(){
   const el=document.getElementById('cat-list'); el.innerHTML='';
-  MAP_CATS.forEach(cat=>{
+  // Separate top-level and sub-categories, sorted by order
+  const topCats=byOrder(MAP_CATS.filter(c=>!c.parentId));
+  const subCats=byOrder(MAP_CATS.filter(c=>!!c.parentId));
+
+  topCats.forEach(cat=>{
+    const children=subCats.filter(s=>s.parentId===cat.id);
+    // Count: direct points + points in sub-cats
+    const directPts=POINTS.filter(p=>p.cat===cat.id);
+    const allPts=POINTS.filter(p=>p.cat===cat.id||children.some(s=>s.id===p.cat));
+    const on=catTog[cat.id]!==false;
+    const g=document.createElement('div');
+    g.className='cat-group'; g.id='cg-'+cat.id;
+
+    // Build sub-cat HTML
+    let subHTML='';
+    children.forEach(sub=>{
+      const subPts=POINTS.filter(p=>p.cat===sub.id);
+      const subOn=catTog[sub.id]!==false;
+      subHTML+=`<div class="subcat-group" id="cg-${sub.id}">
+        <div class="subcat-hdr" onclick="togCatExp('${sub.id}','subcat')">
+          <button class="tog ${subOn?'on':'off'}" id="tog-${sub.id}" onclick="event.stopPropagation();togCat('${sub.id}')"></button>
+          <div class="subcat-dot" style="background:${sub.color}"></div>
+          <span class="subcat-lbl">${sub.emoji} ${sub.name}</span>
+          <span class="subcat-cnt">${subPts.length}</span>
+          <button class="cat-edit" onclick="event.stopPropagation();openCatMod('map','${sub.id}')">✏️</button>
+          <span class="subcat-chev">▶</span>
+        </div>
+        <div class="subcat-pt-list" id="pl-${sub.id}">
+          ${subPts.map(p=>`<div class="pt-item subcat-pt-item" id="pi-${p.id}" onclick="zoomToPin('${p.id}')">${sub.emoji} ${p.name}</div>`).join('')}
+        </div>
+      </div>`;
+    });
+
+    g.innerHTML=`<div class="cat-hdr" onclick="togCatExp('${cat.id}')">
+      <span class="drag-handle" onclick="event.stopPropagation()" title="Drag to reorder">⠿</span>
+      <button class="tog ${on?'on':'off'}" id="tog-${cat.id}" onclick="event.stopPropagation();togCat('${cat.id}')"></button>
+      <div class="cat-dot" style="background:${cat.color}"></div>
+      <span class="cat-lbl">${cat.name}</span>
+      <span class="cat-cnt">${allPts.length}</span>
+      <button class="cat-edit" onclick="event.stopPropagation();openCatMod('map','${cat.id}')">✏️</button>
+      <button class="cat-edit" title="Add sub-category" onclick="event.stopPropagation();openCatMod('map',null,'${cat.id}')" style="opacity:1;color:var(--acc)">+</button>
+      <span class="cat-chev">▶</span>
+    </div>
+    <div class="pt-list" id="pl-${cat.id}">
+      ${directPts.map(p=>`<div class="pt-item" id="pi-${p.id}" onclick="zoomToPin('${p.id}')">${cat.emoji} ${p.name}</div>`).join('')}
+      ${subHTML}
+    </div>`;
+    el.appendChild(g);
+    // Wire drag-to-reorder for this category
+    applyDragToEl(g,cat.id,'map_cats');
+    // Wire drag for sub-cats and their points
+    children.forEach(sub=>{
+      const subEl=document.getElementById('cg-'+sub.id);
+      if(subEl) applyDragToEl(subEl,sub.id,'map_cats');
+      document.querySelectorAll(`#pl-${sub.id} .pt-item`).forEach(ptEl=>{
+        const pid=ptEl.id.replace('pi-','');
+        if(pid) applyDragToEl(ptEl,pid,'points');
+      });
+    });
+    // Wire drag for direct points inside this cat
+    document.querySelectorAll(`#pl-${cat.id} > .pt-item`).forEach(ptEl=>{
+      const pid=ptEl.id.replace('pi-','');
+      if(pid) applyDragToEl(ptEl,pid,'points');
+    });
+  });
+
+  // Orphaned sub-cats (parent deleted) — show at bottom
+  const orphans=subCats.filter(s=>!topCats.find(t=>t.id===s.parentId));
+  orphans.forEach(cat=>{
     const pts=POINTS.filter(p=>p.cat===cat.id);
     const on=catTog[cat.id]!==false;
     const g=document.createElement('div');
@@ -629,11 +698,18 @@ function buildMapSidebar(){
     el.appendChild(g);
   });
 }
-window.togCatExp=id=>document.getElementById('cg-'+id)?.classList.toggle('open');
-window.togCat=id=>{
+window.togCatExp=function(id,type){
+  const el=document.getElementById('cg-'+id); if(!el)return;
+  el.classList.toggle('open');
+};
+window.togCat=function(id){
   catTog[id]=catTog[id]===false;
   document.getElementById('tog-'+id).className='tog '+(catTog[id]===false?'off':'on');
-  document.querySelectorAll('.pin').forEach(el=>{if(el.dataset.cat===id)el.classList.toggle('hide',catTog[id]===false);});
+  // Collect all cat ids to toggle: this cat + any sub-cats
+  const toToggle=[id,...MAP_CATS.filter(c=>c.parentId===id).map(c=>c.id)];
+  document.querySelectorAll('.pin').forEach(el=>{
+    if(toToggle.includes(el.dataset.cat)) el.classList.toggle('hide',catTog[id]===false);
+  });
 };
 window.filterPts=()=>{
   const q=document.getElementById('pt-search').value.toLowerCase();
@@ -721,12 +797,30 @@ function buildEmGrid(){
 window.pickC=(c,el)=>{eSelC=c;document.querySelectorAll('#clr-row .clr-sw').forEach(s=>s.classList.remove('on'));el?.classList.add('on');};
 window.pickCcustom=c=>{eSelC=c;document.querySelectorAll('#clr-row .clr-sw').forEach(s=>s.classList.remove('on'));};
 window.pickE=(e,el)=>{eSelE=e;document.getElementById('cat-em-custom').value='';document.querySelectorAll('#em-grid .em-opt').forEach(o=>o.classList.remove('on'));el?.classList.add('on');};
-window.openCatMod=function(type,id){
+window.openCatMod=function(type,id,presetParentId){
   ecatType=type||'map'; ecatId=id||null;
   document.getElementById('cat-mod-title').textContent=id?'Edit Category':'New Category';
   document.getElementById('cat-del-btn').style.display=id?'block':'none';
   const arr=type==='craft'?CRAFT_CATS:type==='vendor'?VENDOR_CATS:MAP_CATS;
-  if(id){const c=arr.find(x=>x.id===id);document.getElementById('cat-name').value=c.name;eSelC=c.color;eSelE=c.emoji;}
+  // Build parent dropdown (only for map cats; hide for craft/vendor)
+  const parentRow=document.getElementById('cat-parent-row');
+  if(type==='map'||!type){
+    parentRow.style.display='block';
+    // Only top-level cats can be parents (no nesting beyond 1 level)
+    const topCats=MAP_CATS.filter(c=>!c.parentId && c.id!==id);
+    const sel=document.getElementById('cat-parent');
+    sel.innerHTML='<option value="">— None (top level) —</option>'
+      +topCats.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+    if(id){
+      const existing=arr.find(x=>x.id===id);
+      sel.value=existing?.parentId||'';
+    } else {
+      sel.value=presetParentId||'';
+    }
+  } else {
+    parentRow.style.display='none';
+  }
+  if(id){const existing=arr.find(x=>x.id===id);document.getElementById('cat-name').value=existing.name;eSelC=existing.color;eSelE=existing.emoji;}
   else{document.getElementById('cat-name').value='';eSelC=PC[Math.floor(Math.random()*PC.length)];eSelE=PE[Math.floor(Math.random()*PE.length)];}
   buildClrRow();buildEmGrid();document.getElementById('cat-em-custom').value='';
   document.getElementById('cat-mod').classList.add('on');
@@ -737,7 +831,14 @@ window.saveCat=async function(){
   const emoji=document.getElementById('cat-em-custom').value.trim()||eSelE;
   const id=ecatId||uid();
   const col=ecatType==='craft'?'craft_cats':ecatType==='vendor'?'vendor_cats':'map_cats';
-  await dbSet(col,id,{id,name,color:eSelC,emoji}); closeCatMod();
+  const data={id,name,color:eSelC,emoji};
+  // Only map cats support parentId
+  if(ecatType==='map'||!ecatType){
+    const parentVal=document.getElementById('cat-parent').value;
+    if(parentVal) data.parentId=parentVal;
+    else delete data.parentId; // ensure no stale parentId
+  }
+  await dbSet(col,id,data); closeCatMod();
 };
 window.delCat=async function(){
   if(!ecatId)return;
@@ -756,7 +857,25 @@ window.openPtMod=function(px,py,editId){
   const p = isEdit ? POINTS.find(x=>x.id===editId) : null;
   document.getElementById('pt-mod-title').textContent = isEdit ? 'Edit Pin' : 'New Map Point';
   document.getElementById('pt-mod-hint').style.display = isEdit ? 'none' : 'block';
-  document.getElementById('pt-cat').innerHTML=MAP_CATS.map(c=>`<option value="${c.id}"${p&&p.cat===c.id?' selected':''}>${c.emoji} ${c.name}</option>`).join('');
+  (()=>{
+  const topCats=MAP_CATS.filter(x=>!x.parentId);
+  const subCats=MAP_CATS.filter(x=>!!x.parentId);
+  let opts='';
+  topCats.forEach(top=>{
+    const sel=p&&p.cat===top.id?' selected':'';
+    opts+=`<option value="${top.id}"${sel}>${top.emoji} ${top.name}</option>`;
+    subCats.filter(s=>s.parentId===top.id).forEach(sub=>{
+      const ssel=p&&p.cat===sub.id?' selected':'';
+      opts+=`<option value="${sub.id}"${ssel}>&nbsp;&nbsp;↳ ${sub.emoji} ${sub.name}</option>`;
+    });
+  });
+  // Orphans
+  subCats.filter(s=>!topCats.find(t=>t.id===s.parentId)).forEach(sub=>{
+    const ssel=p&&p.cat===sub.id?' selected':'';
+    opts+=`<option value="${sub.id}"${ssel}>${sub.emoji} ${sub.name}</option>`;
+  });
+  document.getElementById('pt-cat').innerHTML=opts;
+})();
   document.getElementById('pt-name').value = p ? p.name : '';
   document.getElementById('pt-x').value = p ? p.x : (px||'');
   document.getElementById('pt-y').value = p ? p.y : (py||'');
@@ -778,14 +897,24 @@ window.savePt=async function(){
 
 // ── CRAFT ──
 function buildCrPills(){
-  document.getElementById('cr-pills').innerHTML=`<span class="pill${crFilter==='all'?' on':''}" onclick="setCrFilter('all')">All</span>`
-    +CRAFT_CATS.map(c=>`<span class="pill${crFilter===c.id?' on':''}"><span onclick="setCrFilter('${c.id}')">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('craft','${c.id}')">✏️</span></span>`).join('');
+  const el=document.getElementById('cr-pills');
+  el.innerHTML=`<span class="pill${crFilter==='all'?' on':''}" onclick="setCrFilter('all')">All</span>`;
+  byOrder(CRAFT_CATS).forEach(c=>{
+    const span=document.createElement('span');
+    span.className='pill'+(crFilter===c.id?' on':'');
+    span.id='crpill-'+c.id;
+    span.innerHTML=`<span class="drag-handle" title="Drag to reorder" style="pointer-events:none">⠿</span><span onclick="setCrFilter('${c.id}')" style="pointer-events:none">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('craft','${c.id}')" style="pointer-events:auto">✏️</span>`;
+    el.appendChild(span);
+    applyDragToEl(span,c.id,'craft_cats');
+  });
 }
 window.setCrFilter=f=>{crFilter=f;buildCrPills();renderCraftList();};
 function renderCraftList(){
   const q=(document.getElementById('cr-search')?.value||'').toLowerCase();
-  const items=CRAFTS.filter(c=>(crFilter==='all'||c.cat===crFilter)&&c.name.toLowerCase().includes(q));
-  document.getElementById('cr-list').innerHTML=items.map(c=>{const cat=CRAFT_CATS.find(x=>x.id===c.cat);return`<div class="list-item${selCraft===c.id?' sel':''}" onclick="selectCraft('${c.id}')"><div class="li-icon" style="background:${cat?.color||'#444'}22">${c.icon}</div><div><div class="li-name">${c.name}</div><div class="li-sub">${cat?.name||''}</div></div><div class="li-badge">Lv${c.level||'?'}</div></div>`;}).join('');
+  const items=byOrder(CRAFTS.filter(c=>(crFilter==='all'||c.cat===crFilter)&&c.name.toLowerCase().includes(q)));
+  const el=document.getElementById('cr-list');
+  el.innerHTML=items.map(c=>{const cat=CRAFT_CATS.find(x=>x.id===c.cat);return`<div class="list-item${selCraft===c.id?' sel':''}" id="cr-li-${c.id}" onclick="selectCraft('${c.id}')"><span class="drag-handle" title="Drag to reorder">⠿</span><div class="li-icon" style="background:${cat?.color||'#444'}22">${c.icon}</div><div><div class="li-name">${c.name}</div><div class="li-sub">${cat?.name||''}</div></div><div class="li-badge">Lv${c.level||'?'}</div></div>`;}).join('');
+  items.forEach(c=>{const li=document.getElementById('cr-li-'+c.id);if(li)applyDragToEl(li,c.id,'crafts');});
 }
 window.selectCraft=function(id){
   selCraft=id;renderCraftList();
@@ -841,8 +970,10 @@ window.editCraft=function(id){
 function buildCrPinOpts(selectedIds){
   document.getElementById('cr-pin-opts').innerHTML=POINTS.map(p=>{
     const cat=MAP_CATS.find(c=>c.id===p.cat);
+    const parent=cat?.parentId?MAP_CATS.find(x=>x.id===cat.parentId):null;
+    const catLabel=parent?`${parent.name} › ${cat.name}`:(cat?.name||'');
     const checked=selectedIds.includes(p.id)?'checked':'';
-    return`<label class="link-opt"><input type="checkbox" value="${p.id}" ${checked}> ${cat?.emoji||'📍'} <b>${p.name}</b> <span style="color:var(--txt2);font-size:11px;margin-left:4px">${cat?.name||''} · ${p.x.toFixed(1)}%, ${p.y.toFixed(1)}%</span></label>`;
+    return`<label class="link-opt"><input type="checkbox" value="${p.id}" ${checked}> ${cat?.emoji||'📍'} <b>${p.name}</b> <span style="color:var(--txt2);font-size:11px;margin-left:4px">${catLabel} · ${parseFloat(p.x).toFixed(1)}%, ${parseFloat(p.y).toFixed(1)}%</span></label>`;
   }).join('');
 }
 window.closeCraftMod=()=>document.getElementById('cr-mod').classList.remove('on');
@@ -858,14 +989,24 @@ window.saveCraft=async function(){
 
 // ── VENDOR ──
 function buildVnPills(){
-  document.getElementById('vn-pills').innerHTML=`<span class="pill${vnFilter==='all'?' on':''}" onclick="setVnFilter('all')">All</span>`
-    +VENDOR_CATS.map(c=>`<span class="pill${vnFilter===c.id?' on':''}"><span onclick="setVnFilter('${c.id}')">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('vendor','${c.id}')">✏️</span></span>`).join('');
+  const el=document.getElementById('vn-pills');
+  el.innerHTML=`<span class="pill${vnFilter==='all'?' on':''}" onclick="setVnFilter('all')">All</span>`;
+  byOrder(VENDOR_CATS).forEach(c=>{
+    const span=document.createElement('span');
+    span.className='pill'+(vnFilter===c.id?' on':'');
+    span.id='vnpill-'+c.id;
+    span.innerHTML=`<span class="drag-handle" title="Drag to reorder" style="pointer-events:none">⠿</span><span onclick="setVnFilter('${c.id}')" style="pointer-events:none">${c.emoji} ${c.name}</span><span class="pill-edit" onclick="openCatMod('vendor','${c.id}')" style="pointer-events:auto">✏️</span>`;
+    el.appendChild(span);
+    applyDragToEl(span,c.id,'vendor_cats');
+  });
 }
 window.setVnFilter=f=>{vnFilter=f;buildVnPills();renderVendorList();};
 function renderVendorList(){
   const q=(document.getElementById('vn-search')?.value||'').toLowerCase();
-  const items=VENDORS.filter(v=>(vnFilter==='all'||v.cat===vnFilter)&&v.name.toLowerCase().includes(q));
-  document.getElementById('vn-list').innerHTML=items.map(v=>{const cat=VENDOR_CATS.find(x=>x.id===v.cat);return`<div class="list-item${selVendor===v.id?' sel':''}" onclick="selectVendor('${v.id}')"><div class="li-icon" style="background:${cat?.color||'#444'}22">${v.icon}</div><div><div class="li-name">${v.name}</div><div class="li-sub">${cat?.name||''}</div></div><div class="li-badge">${v.trades?.length||0} trades</div></div>`;}).join('');
+  const items=byOrder(VENDORS.filter(v=>(vnFilter==='all'||v.cat===vnFilter)&&v.name.toLowerCase().includes(q)));
+  const el=document.getElementById('vn-list');
+  el.innerHTML=items.map(v=>{const cat=VENDOR_CATS.find(x=>x.id===v.cat);return`<div class="list-item${selVendor===v.id?' sel':''}" id="vn-li-${v.id}" onclick="selectVendor('${v.id}')"><span class="drag-handle" title="Drag to reorder">⠿</span><div class="li-icon" style="background:${cat?.color||'#444'}22">${v.icon}</div><div><div class="li-name">${v.name}</div><div class="li-sub">${cat?.name||''}</div></div><div class="li-badge">${v.trades?.length||0} trades</div></div>`;}).join('');
+  items.forEach(v=>{const li=document.getElementById('vn-li-'+v.id);if(li)applyDragToEl(li,v.id,'vendors');});
 }
 window.selectVendor=function(id){
   selVendor=id;renderVendorList();
@@ -996,6 +1137,97 @@ window.exitPinPickMode=function(){
     cb.checked=pickModeSelected.includes(cb.value);
   });
 };
+
+// ══════════════════════════════════════════
+//  DRAG-TO-REORDER ENGINE
+// ══════════════════════════════════════════
+// Generic drag reorder for any list.
+// Each draggable element needs: draggable="true", data-drag-id, data-drag-list
+// Lists: 'map_cats', 'points', 'craft_cats', 'crafts', 'vendor_cats', 'vendors'
+let dragSrcId=null, dragListName=null;
+
+function getListArray(name){
+  if(name==='map_cats')    return MAP_CATS;
+  if(name==='points')      return POINTS;
+  if(name==='craft_cats')  return CRAFT_CATS;
+  if(name==='crafts')      return CRAFTS;
+  if(name==='vendor_cats') return VENDOR_CATS;
+  if(name==='vendors')     return VENDORS;
+  return [];
+}
+function getListCollection(name){
+  if(name==='map_cats')    return 'map_cats';
+  if(name==='points')      return 'points';
+  if(name==='craft_cats')  return 'craft_cats';
+  if(name==='crafts')      return 'crafts';
+  if(name==='vendor_cats') return 'vendor_cats';
+  if(name==='vendors')     return 'vendors';
+  return name;
+}
+
+async function saveOrder(listName, arr){
+  // Write order field to each item in Firestore
+  const col=getListCollection(listName);
+  const writes=arr.map((item,i)=>dbSet(col,item.id,{...item,order:i}));
+  await Promise.all(writes);
+}
+
+function applyDragToEl(el, id, listName){
+  el.setAttribute('draggable','true');
+  el.dataset.dragId=id;
+  el.dataset.dragList=listName;
+
+  el.addEventListener('dragstart',e=>{
+    dragSrcId=id; dragListName=listName;
+    setTimeout(()=>el.classList.add('dragging'),0);
+    e.dataTransfer.effectAllowed='move';
+  });
+  el.addEventListener('dragend',()=>{
+    el.classList.remove('dragging','drag-over-top','drag-over-bot');
+    document.querySelectorAll('.drag-over-top,.drag-over-bot').forEach(x=>{
+      x.classList.remove('drag-over-top','drag-over-bot');
+    });
+  });
+  el.addEventListener('dragover',e=>{
+    e.preventDefault();
+    if(el.dataset.dragList!==dragListName)return;
+    el.classList.remove('drag-over-top','drag-over-bot');
+    const mid=el.getBoundingClientRect().top+el.offsetHeight/2;
+    el.classList.add(e.clientY<mid?'drag-over-top':'drag-over-bot');
+  });
+  el.addEventListener('dragleave',()=>{
+    el.classList.remove('drag-over-top','drag-over-bot');
+  });
+  el.addEventListener('drop',async e=>{
+    e.preventDefault();
+    el.classList.remove('drag-over-top','drag-over-bot');
+    if(!dragSrcId||dragSrcId===id||el.dataset.dragList!==dragListName)return;
+    const arr=getListArray(dragListName);
+    const srcIdx=arr.findIndex(x=>x.id===dragSrcId);
+    const tgtIdx=arr.findIndex(x=>x.id===id);
+    if(srcIdx<0||tgtIdx<0)return;
+    // Determine insert position
+    const mid=el.getBoundingClientRect().top+el.offsetHeight/2;
+    const insertAfter=e.clientY>=mid;
+    const [moved]=arr.splice(srcIdx,1);
+    const newIdx=arr.findIndex(x=>x.id===id);
+    arr.splice(insertAfter?newIdx+1:newIdx,0,moved);
+    // Re-assign order field and persist
+    arr.forEach((item,i)=>item.order=i);
+    await saveOrder(dragListName,arr);
+    // Re-render
+    rebuildAfterReorder(dragListName);
+  });
+}
+
+function rebuildAfterReorder(listName){
+  if(listName==='map_cats'||listName==='points') buildMapSidebar();
+  if(listName==='craft_cats'||listName==='crafts'){ buildCrPills(); renderCraftList(); }
+  if(listName==='vendor_cats'||listName==='vendors'){ buildVnPills(); renderVendorList(); }
+}
+
+// Sort an array by its .order field (items without order go last)
+function byOrder(arr){ return [...arr].sort((a,b)=>(a.order??9999)-(b.order??9999)); }
 
 function panToPin(id,zoom){
   const p=POINTS.find(x=>x.id===id); if(!p)return;
